@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>BaseForum</title>
+    <style>
+body {
+  font-family: sans-serif;
+  text-align: center;
+}
+
+h1, h2 {
+  color: #333;
+}
+
+form {
+  width: 500px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+label {
+  font-weight: bold;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 12px 20px;
+  margin: 8px 0;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+}
+
+button[type="submit"] {
+  width: 100%;
+  background-color: #4CAF50;
+  color: white;
+  padding: 14px 20px;
+  margin: 8px 0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button[type="submit"]:hover {
+  background-color: #45a049;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.community-table td {
+  width: 50%;
+  border: 1px solid #ccc;
+  padding: 10px;
+}i
+
+.community-table td:first-child {
+  width: 16.6666%; /* 1/6 of the page width */
+  background-color: #f2f2f
+}
+
+.community-table td:last-child {
+  width: 83.3333%; /* 5/6 of the page width */
+}
+</style>
+  </head>
+  <body>
+      <h1>BaseForum</h1>
+    <div id = "Web3"><h2>You are not signed in to the BASE network. We recommend using the Coinbase browser extension for Chrome. The contract this url services uses Testnet Base Goerli, available at <a href = \"https://www.coinbase.com/faucets/base-ethereum-goerli-faucet\">here.</a></h2></div>
+    
+    <table class="community-table">
+      <tr id="formDiv">
+        <td hidden>
+<h2>Create Community</h2>
+<form id="create-community-form">
+  <label>
+    Community Name:
+    <input type="text" name="name" id="createCommunityName"/>
+  </label>
+  <br />
+  <label>
+    Community Purpose:
+    <input type="text" name="purpose" id="communityPurpose" />
+  </label>
+  <br />
+  <button type="submit" id="createCommunityButton">Create Community</button>
+</form>
+
+<h2>Join Community</h2>
+<form id="join-community-form">
+  <label>
+    Community Name:
+    <input type="text" name="communityId" id = "joinCommunityName"/>
+  </label>
+  <br />
+  <button type="submit" id = "joinCommunityButton">Join Community</button>
+</form>
+
+<h2>Leave Community</h2>
+<form id="leave-community-form">
+  <label>
+    Community Name:
+    <input type="text" name="communityId" id="leaveCommunityName"/>
+  </label>
+  <br />
+  <button type="submit" id = "leaveCommunityButton">Leave Community</button>
+</form>
+
+<h2>Post Content</h2>
+  <label>
+    Community Name:
+    <input type="text" name="contentName" id="contentCommunity"/>
+  </label>
+  <br />
+  <label>
+    Content URL:
+    <input type="text" name="contenturl" id="contentURL" />
+  </label>
+  <br />
+  <button type="submit" id="postContent">Post URL</button>
+
+<h2>Post Comment</h2>
+  <label>
+    Community Name:
+    <input type="text" name="commentName" id="commentCommunity"/>
+  </label>
+  <br />
+  <label>
+    Post ID:
+    <input type="number" name="commentid" id="commentReference" />
+  </label>
+  <br />
+    <label>
+    Comment:
+    <input type="text" name="comment" id="comment" />
+  </label>
+  <br />
+
+  <button type="submit" id="postComment">Post Comment</button>
+
+  
+
+<h2>Community Administration</h2>
+<form id="community-administration-form">
+  <label>
+    Community Name:
+    <input type="text" name="communityAdminName" id="communityAdminName"/>
+  </label>
+  <br />
+  <label>
+    Post ID:
+    <input type="text" name="postID" id="postID"/>
+  </label>
+  <br />
+  <label>
+    New HTML:
+    <input type="text" name="newHTML" id="newHTML"/>
+  </label>
+  <br />
+  <button type="submit" id = "changeHTML">Change HTML</button>
+  <br />
+  <button type="submit" id = "removePostButton">Remove Post</button>
+</form>
+
+</td>
+
+
+
+    <td id = "etherscanResults">
+        
+<table>
+  <thead>
+    <tr>
+      <th>Community Name</th>
+      <th>Community Content</th>
+    </tr>
+  </thead>
+  <tbody id = "etherscan">
+
+
+
+    <script type="module">
+    import { ethers } from "./ethers.min.js";
+
+    // A Web3Provider wraps a standard Web3 provider, which is
+    // what MetaMask injects as window.ethereum into each page
+    const url = 'https://goerli.base.org';
+    const provider = new ethers.providers.JsonRpcProvider(url);
+    const provider1 = new ethers.providers.Web3Provider(window.ethereum);
+
+    // The MetaMask plugin also allows signing transactions to
+    // send ether and pay to change state within the blockchain.
+    // For this, you need the account signer...
+    const signer = provider1.getSigner();
+
+    if (signer){
+        document.getElementById("Web3").innerHTML = "This application requires a web3 provider that uses Testnet Base Goerli, available <a href = \"https://www.coinbase.com/faucets/base-ethereum-goerli-faucet\">here.</a> You may also need to change the network in your extension from ETH to BASE, Settings>Dapp Connections>webed.academy>Change Network";
+        document.getElementById("formDiv").innerHTML = document.getElementById("formDiv").innerHTML.replace("hidden", "");
+    }
+
+    // MetaMask requires requesting permission to connect users accounts
+    await provider1.send("eth_requestAccounts", []);
+
+    const address = "0x2E9432cf454728d126CFe744cf2A8DfC71944DA4";
+    
+    const abi = [
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "content",
+				"type": "string"
+			}
+		],
+		"name": "addContent",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "op",
+				"type": "string"
+			}
+		],
+		"name": "createCommunity",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "responseID",
+				"type": "uint256"
+			}
+		],
+		"name": "downVoteComment",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "content",
+				"type": "string"
+			}
+		],
+		"name": "editHTML",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "emission",
+				"type": "string"
+			}
+		],
+		"name": "emitString",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			}
+		],
+		"name": "joinCommunity",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "communityName",
+				"type": "string"
+			}
+		],
+		"name": "leaveCommunity",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "communityName",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "responseID",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "content",
+				"type": "string"
+			}
+		],
+		"name": "postComment",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "index",
+				"type": "uint256"
+			}
+		],
+		"name": "removeContent",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "responseID",
+				"type": "uint256"
+			}
+		],
+		"name": "upVoteComment",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"name": "communities",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "homePageHTML",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "communityBalance",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "communityDeposit",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "totalPosts",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			}
+		],
+		"name": "comNames",
+		"outputs": [
+			{
+				"internalType": "string[]",
+				"name": "content",
+				"type": "string[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "contentDisplay",
+		"outputs": [
+			{
+				"internalType": "string[]",
+				"name": "content",
+				"type": "string[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+    // read only
+    const contractRead = new ethers.Contract(address, abi, provider);
+    var contentString = await contractRead.contentDisplay();
+    var displayArr = [];
+    var communities = [];
+    console.log(contentString);
+    for(var i = 0; i < contentString.length & i < 100; i ++){
+        if(contentString[i].includes("|HTML|")){
+            name = contentString [i].slice(10).split("<")[0];
+            communities.push(name)
+            displayArr.push("<tr><td>" + name + "</td>");
+            displayArr[displayArr.length-1] += "<td>" + "<iframe srcdoc = \"" + contentString [i].slice(6) + "\"></iframe></td>";
+        }
+        else {
+            var stuff = contentString[i].split("|");
+            // TODO: This is where content rows are formatted. if the post number is not equal to total post count, then it is a comment and gets treated differnety. Also need to ad different stuff for different types of links.
+            if (stuff[2].endsWith(".gif") || stuff[2].endsWith(".png") || stuff[2].endsWith(".jpg")){
+                stuff[2] = "<img src = \"" + stuff[2] + "\" width=\"560\" height=\"315\">";
+                displayArr[communities.indexOf(stuff[0])] += "<td>" +  stuff[1] + stuff[2] + "</td>";
+            }
+	       else if(stuff[2].includes(".be/")){
+	           stuff[2] = stuff[2].replace(".be/", "be.com/embed/");
+	           displayArr[communities.indexOf(stuff[0])] += "<td>" +  stuff[1] + "<iframe width=\"560\" height=\"315\" src = \"" + stuff[2] + "\"title=\"YouTube video player\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe></td>";
+	       }
+	       else if(stuff[2].includes("watch?v=")){
+	           stuff[2] = stuff[2].replace("watch?v=", "embed/");
+	           displayArr[communities.indexOf(stuff[0])] += "<td>" +  stuff[1] + "<iframe width=\"560\" height=\"315\" src = \"" + stuff[2] + "\"title=\"YouTube video player\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe></td>";
+	       }
+
+            else if(stuff[2].includes(".com") || 
+	                        stuff[2].includes(".gov") || 
+	                        stuff[2].includes(".academy") || 
+	                        stuff[2].includes(".edu") ||
+	                        stuff[2].includes(".io") ||
+	                        stuff[2].includes(".ai") ||
+	                        stuff[2].includes(".net") ||
+	                        stuff[2].includes(".org")){
+	            if (!stuff[2].includes("https://")){
+	                stuff[2] = "https://" + stuff[2];
+	            } 
+
+                displayArr[communities.indexOf(stuff[0])] += "<td>" +  stuff[1] + "<iframe width=\"560\" height=\"315\" src = \"" + stuff [2] + "\"></iframe></td>";
+            }
+            // TODO: Get comments to thread
+            else {
+                for(var j = i; j > 0; j --){
+                    var compareArr = contentString[j].split("|");
+                    if(stuff [0] == compareArr[0] & stuff[1] < compareArr[1]){
+                        console.log(displayArr[communities.indexOf(stuff[0])]);
+                        var replaceArr = displayArr[communities.indexOf(stuff[0])].split("</td>");
+                        var replaceString = "\"></iframe>";
+                        displayArr[communities.indexOf(stuff[0])] = displayArr[communities.indexOf(stuff[0])].replace(replaceString, stuff[1].toString() + stuff[2] + "<br>\"></iframe>");
+                    
+                        break;
+                    }
+                }
+            }
+            
+        }
+        
+    }
+    console.log(displayArr);
+    for(var i = 0; i < displayArr.length; i ++){
+        document.getElementById("etherscan").innerHTML += displayArr[i] + "</tr>";
+    }
+
+    // Introduces button as Element
+    const createCommunityButton = document.getElementById("createCommunityButton");
+    // allows user to click button to generate an input
+    createCommunityButton.addEventListener("click", createCommunity);
+    const contractWrite = new ethers.Contract(address, abi, signer);
+    function createCommunity (){
+
+
+        contractWrite.createCommunity(document.getElementById("createCommunityName").value, document.getElementById("communityPurpose").value, {value: ethers.utils.parseEther(".0001")});
+        
+        
+    }
+    // Introduces button as Element
+    const joinCommunityButton = document.getElementById("joinCommunityButton");
+    // allows user to click button to generate an input
+    joinCommunityButton.addEventListener("click", joinCommunity);
+
+    function joinCommunity (){
+        contractWrite.joinCommunity(document.getElementById("joinCommunityName").value, {value: ethers.utils.parseEther(".00001")});
+    }
+    
+    // Introduces button as Element
+    const leaveCommunityButton = document.getElementById("leaveCommunityButton");
+    // allows user to click button to generate an input
+    leaveCommunityButton.addEventListener("click", leaveCommunity);
+
+    function leaveCommunity (){
+        contractWrite.leaveCommunity(document.getElementById("leaveCommunityName").value);
+    }
+    // Introduces button as Element
+    const postContentButton = document.getElementById("postContent");
+    // allows user to click button to generate an input
+    postContentButton.addEventListener("click", postContent);
+    
+    function postContent (){
+        contractWrite.addContent(document.getElementById("contentCommunity").value, document.getElementById("contentURL").value);
+    }
+
+    // Introduces button as Element
+    const postCommentButton = document.getElementById("postComment");
+    // allows user to click button to generate an input
+    postCommentButton.addEventListener("click", postComment);
+
+    function postComment (){
+        contractWrite.postComment(document.getElementById("commentCommunity").value, document.getElementById("commentReference").value, document.getElementById("comment").value);
+    }
+
+    function upvoteComment (){
+        contractWrite.upVoteComment(document.getElementById("communityAdminName").value, document.getElementById("postID").value);
+    }
+
+    function downvoteComment (){
+        contractWrite.downVoteComment(document.getElementById("communityAdminName").value, document.getElementById("postID").value);
+    }
+
+    // Introduces button as Element
+    const editHTML = document.getElementById("changeHTML");
+    // allows user to click button to generate an input
+    postContentButton.addEventListener("click", editHTML);
+    function editHTMLButton (){
+        contractWrite.editHTML(document.getElementById("communityAdminName").value, document.getElementById("newHTML").value);
+    }
+
+    // Introduces button as Element
+    const removePost = document.getElementById("removePostButton");
+    // allows user to click button to generate an input
+    postContentButton.addEventListener("click", removePost);
+
+    function removeContent (){
+        contractWrite.removeContent(document.getElementById("communityAdminName").value, document.getElementById("postID").value);
+    }
+
+    </script>
+
+    </tbody>
+</table>
+
+   
+  </body>
+</html>
+
