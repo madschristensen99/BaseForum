@@ -12,9 +12,9 @@ contract neighbornet is ERC20 {
 
 contract Tag is ERC721Enumerable {
     neighbornet public nnetContract;
-    mapping(address => uint256) public lastMint;
-    mapping(string => uint256) private _tagFees;
-    mapping(string => address) private _tagOwners;
+    mapping(address => uint256) public lastMint; // only mint every 24 hrs
+    mapping(string => uint256) private _tagFees; // paid messaging
+    mapping(string => address) private _tagOwners; // account of ownership
 
     constructor(address _nnetContract) ERC721("Tag", "TAG") {
         nnetContract = neighbornet(_nnetContract);
@@ -50,7 +50,15 @@ contract Tag is ERC721Enumerable {
         require(owner != address(0), "Tag does not exist");
         return owner;
     }
+
 }
+
+/* TODOs:
+Need to be able to get total number of upvotes and downvotes
+need users to be able to modify number of upvotes and downvotes
+TagWall should be an array, a list of the assosiated tags. but also we need to know all the times that the post has been tagged and by who
+These can also be implemented as events. It may not be important for the contract logic to know what has happened, but it will be for the users
+*/
 
 contract Forum {
     struct Post {
@@ -59,6 +67,7 @@ contract Forum {
         mapping (string => uint) tags; // tags mapping updated here
         mapping (address => uint) upvotes;
         mapping (address => uint) downvotes;
+        uint netScore;
     }
 
     Post[] public Forum;
@@ -70,9 +79,9 @@ contract Forum {
         nnetContract = neighbornet(_nnetContract);
         tagContract = Tag(_tagContract);
     }
+    // TODO: event for tag
 
     function createPost(string memory content) public {
-        require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token");
         Forum.push();
         Post storage p = Forum[Forum.length - 1];
         p.author = msg.sender;
@@ -90,9 +99,10 @@ contract Forum {
         }
         Post storage post = Forum[postId];
         post.tags[tagId] += 1;  // Increment the count of the tag on the post here
+        // TODO: add event emission
     }
 
-        function removeTag(uint256 postId, string memory tagId) public {
+    function removeTag(uint256 postId, string memory tagId) public {
         Post storage post = Forum[postId];
         require(post.author == msg.sender, "Only the post author can remove tags");
         post.tags[tagId] = 0;
@@ -101,22 +111,24 @@ contract Forum {
     function upvotePost(uint256 postId, uint256 amount) public {
         require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to vote");
         require(nnetContract.balanceOf(msg.sender) >= amount, "Not enough NNET tokens to upvote");
+        require(Forum[postId].upvotes[msg.sender] == 0, "Already upvoted");
         Forum[postId].upvotes[msg.sender] += amount;
+        Forum[postId].netScore += amount;
     }
 
     function downvotePost(uint256 postId, uint256 amount) public {
         require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to vote");
         require(nnetContract.balanceOf(msg.sender) >= amount, "Not enough NNET tokens to downvote");
+        require(Forum[postId].downvotes[msg.sender] == 0, "Already downvoted");
         Forum[postId].downvotes[msg.sender] += amount;
+        Forum[postId].netScore -= amount;
     }
 
-    function getPost(uint256 postId) public view returns (address, string memory) {
+    function getPost(uint256 postId) public view returns (address, string memory, uint) {
         Post storage post = Forum[postId];
-        return (post.author, post.content);
+        return (post.author, post.content, post.netScore);
     }
+// TODO: have an account of the total upvotes and downvotes a post has. 
 
-    function getVotes(uint256 postId) public view returns (uint) {
-        return (postId);
-    }
 
 }
