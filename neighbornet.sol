@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+/*
+This contract presents a decentralized forum where discussions are categorized using unique tags. The tokenomics of this system revolves around two tokens: NeighborNet (NNET) and Tag.
 
+NNET, an ERC20 token, serves as a membership token and is used as currency for certain actions. Holding at least one NNET token is a prerequisite to mint new tags, vote on posts, and tag posts. This increases the utility and potential demand for NNET tokens.
+
+Tag, an ERC721 token, represents a unique topic in the forum. Each tag is unique and owned by an individual who can charge a fee for others to use it. This creates a unique monetization model for popular content creators or influencers who can mint tags early and gain financial benefits from their subsequent popularity. It also encourages early adoption and active participation in the community.
+
+By aligning incentives, this contract encourages quality content creation, active voting (curating), and valuable tag creation, which may be beneficial for the growth and vibrancy of the online community.
+
+The contract also enables the monetization of online behavior including credentials. For example, a highly upvoted post can demonstrate expertise in a particular field, which might enhance the author's reputation or job prospects.
+*/
+pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
@@ -11,6 +21,22 @@ contract NeighborNet is ERC20 {
         // The initial minting of tokens establishes the total supply of tokens in the economy
         // This can create an incentive for early adoption if the token's value appreciates over time
     }
+
+    // What we can't have is somebody who upvotes what they like then sends their money to an account they also control and then upvote the same post again. So we created a rule: after you vote on a post, there's a 24 hour lock on your tokens. Maybe it should be a week idk
+    mapping(address => uint256) public lastUpvote;
+
+    function getLastVoteTime(address _voter) public view returns (uint256) {
+        return lastUpvote[_voter];
+    }
+
+    function lockAfterVote() public {
+        lastUpvote[msg.sender] = block.timestamp;
+    }
+
+    function canTransfer(address _from) public view returns (bool) {
+        return (block.timestamp >= lastUpvote[_from] + 1 days);
+    }
+
 }
 
 // The Tag contract which is a unique identifier for different topics
@@ -19,6 +45,20 @@ contract Tag is ERC721Enumerable {
     mapping(address => uint256) public lastMint; // only mint every 24 hrs
     mapping(string => uint256) private _tagFees; // paid messaging & fundraising
     mapping(string => address) private _tagOwners; // account of ownership
+    // Getter for the `lastMint` mapping
+    function getLastMint(address _account) public view returns (uint256) {
+        return lastMint[_account];
+    }
+
+    // Getter for the `_tagFees` mapping
+    function getTagFee(string memory _tagId) public view returns (uint256) {
+        return _tagFees[_tagId];
+    }
+    function getOwnerOf(string memory tagId) public view returns (address) {
+        address owner = _tagOwners[tagId];
+        require(owner != address(0), "Tag does not exist");
+        return owner;
+    }
 
     // Emit an event when a tag is minted
     event TagMinted(address indexed owner, string tagId);
@@ -26,7 +66,15 @@ contract Tag is ERC721Enumerable {
     constructor(address _nnetContract) ERC721("Tag", "TAG") {
         nnetContract = NeighborNet(_nnetContract);
     }
+    mapping(string => uint256[]) private _tagPosts;
 
+    function getTagPosts(string memory tagId) public view returns (uint256[] memory) {
+        return _tagPosts[tagId];
+    }
+    function addPostToTag(string memory tagId, uint256 postId) public {
+        require(msg.sender == getOwnerOf(tagId));
+        _tagPosts[tagId].push(postId);
+    }
     function mintTag(string memory tagId) public {
         // Require holding of at least one NNET token
         // This incentivizes users to acquire and hold NNET tokens, which can help drive the token's value
@@ -40,8 +88,8 @@ contract Tag is ERC721Enumerable {
         // Prevent duplicate tagIds
         // This ensures the uniqueness of tags, which can make owning a popular tag more valuable
         require(_tagOwners[tagId] == address(0), "Tag ID already exists");
-
-        _tagOwners[tagId] = msg.sender;
+        nnetContract.lockAfterVote();
+        _tagOwners[tagId] = msg.sender; // makes function caller the owner
         _mint(msg.sender, uint256(keccak256(bytes(tagId))));
         emit TagMinted(msg.sender, tagId); // Emit an event when a new tag is minted
     }
@@ -58,11 +106,6 @@ contract Tag is ERC721Enumerable {
         return _tagFees[tagId];
     }
 
-    function getOwnerOf(string memory tagId) public view returns (address) {
-        address owner = _tagOwners[tagId];
-        require(owner != address(0), "Tag does not exist");
-        return owner;
-    }
     function getTag(string memory tagId) public view returns (address, uint256) {
         return (getOwnerOf(tagId), getFee(tagId));
     }
@@ -96,8 +139,9 @@ contract Forum {
     }
 
     // Any user can create a post, but they need NNET tokens to tag or vote on posts
-    // This incentivizes users to acquire NNET tokens, which can help drive the token's value
+    // This incentivizes users to acquire NNET tokens while being open to new members
     function createPost(string memory content) public {
+        require(bytes(content).length > 0, "Content field cannot be empty");
         posts.push();
         Post storage p = posts[posts.length - 1];
         p.author = msg.sender;
@@ -118,37 +162,85 @@ contract Forum {
         }
 
         posts[postId].tagWall.push(tagId);  // adds a new record for a posts tagWall
+        tagContract.addPostToTag(tagId, postId); // adds new record for tag
         emit PostTagged(postId, tagId, msg.sender); // Emit an event when a post is tagged
+    }
+    // Remove an upvote from a post
+    function removeUpvotePost(uint256 postId, uint256 amount) public {
+        require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to vote");
+        require(posts[postId].upvotes[msg.sender] >= amount, "You have not upvoted this post with the amount specified");
+
+
+        // Decrease the upvotes count for the post
+        posts[postId].upvotes[msg.sender] -= amount;
+        posts[postId].netScore -= amount;
+    }
+
+    // Remove a downvote from a post
+    function removeDownvotePost(uint256 postId, uint256 amount) public {
+        require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to vote");
+        require(posts[postId].downvotes[msg.sender] >= amount, "You have not downvoted this post with the amount specified");
+
+        // Decrease the downvotes count for the post
+        posts[postId].downvotes[msg.sender] -= amount;
+        posts[postId].netScore += amount;
     }
 
     // Users can vote on posts with their NNET tokens
     // This creates a form of stakeholder voting where users with more tokens have more voting power
     function upvotePost(uint256 postId, uint256 amount) public {
         require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to vote");
-        require(nnetContract.balanceOf(msg.sender) >= amount, "Not enough NNET tokens to upvote");
         require(posts[postId].upvotes[msg.sender] == 0, "Already upvoted");
-        // TODO: require funds wern't recently sent, prevents folks from sending tokens to a new acct to inflate upvotes
+        require(posts[postId].downvotes[msg.sender] == 0, "Cannot upvote and downvote simultaneously");
+        nnetContract.lockAfterVote();
         posts[postId].upvotes[msg.sender] += amount;
         posts[postId].netScore += amount;
     }
 
     function downvotePost(uint256 postId, uint256 amount) public {
         require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to vote");
-        require(nnetContract.balanceOf(msg.sender) >= amount, "Not enough NNET tokens to downvote");
         require(posts[postId].downvotes[msg.sender] == 0, "Already downvoted");
-        // TODO: require funds wern't recently sent, prevents folks from sending tokens to a new acct to inflate downvotes
+        require(posts[postId].upvotes[msg.sender] == 0, "Cannot upvote and downvote simultaneously");
+        nnetContract.lockAfterVote();
         posts[postId].downvotes[msg.sender] += amount;
         posts[postId].netScore -= amount;
     }
+    // Create a post with associated tags
+    function createPostWithTag(string memory content, string[] memory tagIds) public {
+        // Create the post
+        posts.push();
+        Post storage p = posts[posts.length - 1];
+        p.author = msg.sender;
+        p.content = content;
+
+        // Emit an event when a post is created
+        emit PostCreated(msg.sender, content);
+
+        // Loop over the provided tags and add them to the post
+        for(uint i = 0; i < tagIds.length; i++){
+            // Tag the post
+            tagPost(posts.length - 1, tagIds[i]);
+        }
+    }
+
     function deletePost(uint256 postId) public {
         require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to alter community data");
         require(postId < posts.length, "Post does not exist");
         require(posts[postId].author == msg.sender, "Only the author can delete the post");
-        delete posts[postId];
+        posts[postId].content = "";
     }
     function getPost(uint256 postId) public view returns (address, string memory, uint, string[] memory) {
         require(postId < posts.length, "Post does not exist");
         return (posts[postId].author, posts[postId].content, posts[postId].netScore, posts[postId].tagWall);
+    }
+    function getForumLength() public view returns(uint){
+        return posts.length;
+    }
+    function getUpvotes(address addy, uint postId) public view returns(uint){
+        return posts[postId].upvotes[addy];
+    }
+    function getDownvotes(address addy, uint postId) public view returns(uint){
+        return posts[postId].downvotes[addy];
     }
 
 
