@@ -22,7 +22,8 @@ contract NeighborNet is ERC20 {
         // This can create an incentive for early adoption if the token's value appreciates over time
     }
 
-    // What we can't have is somebody who upvotes what they like then sends their money to an account they also control and then upvote the same post again. So we created a rule: after you vote on a post, there's a 24 hour lock on your tokens. Maybe it should be a week idk
+    // we can't have somebody who upvotes what they like then sends their money to an account they also control then upvote the same post again. 
+    // So we created a rule: after you vote on a post, there's a 24 hour lock on your tokens. Maybe it should be a week idk
     mapping(address => uint256) public lastUpvote;
 
     function getLastVoteTime(address _voter) public view returns (uint256) {
@@ -45,6 +46,8 @@ contract Tag is ERC721Enumerable {
     mapping(address => uint256) public lastMint; // only mint every 24 hrs
     mapping(string => uint256) private _tagFees; // paid messaging & fundraising
     mapping(string => address) private _tagOwners; // account of ownership
+    mapping(string => mapping(address => bool)) private _tagFeeExemptions; // tag fee exemptions
+
     // Getter for the `lastMint` mapping
     function getLastMint(address _account) public view returns (uint256) {
         return lastMint[_account];
@@ -71,9 +74,18 @@ contract Tag is ERC721Enumerable {
     function getTagPosts(string memory tagId) public view returns (uint256[] memory) {
         return _tagPosts[tagId];
     }
-    function addPostToTag(string memory tagId, uint256 postId) public {
-        require(msg.sender == getOwnerOf(tagId));
-        _tagPosts[tagId].push(postId);
+
+    function exemptFromTagFee(string memory tagId, address user) public {
+        require(_tagOwners[tagId] == msg.sender, "Only the tag owner can exempt users from the tag fee");
+        _tagFeeExemptions[tagId][user] = true;
+    }
+
+    function revokeTagFeeExemption(string memory tagId, address user) public {
+        require(_tagOwners[tagId] == msg.sender, "Only the tag owner can revoke tag fee exemptions");
+        _tagFeeExemptions[tagId][user] = false;
+    }
+    function isExemptFromTagFee(string memory tagId, address user) public view returns (bool) {
+        return _tagFeeExemptions[tagId][user];
     }
     function mintTag(string memory tagId) public {
         // Require holding of at least one NNET token
@@ -100,12 +112,12 @@ contract Tag is ERC721Enumerable {
         require(_tagOwners[tagId] == msg.sender, "Not tag owner");
         _tagFees[tagId] = fee;
     }
-
+    // get information about a tag
     function getFee(string memory tagId) public view returns (uint256) {
         require(_tagOwners[tagId] != address(0), "Tag does not exist");
         return _tagFees[tagId];
     }
-
+    // retrieve a tag's content
     function getTag(string memory tagId) public view returns (address, uint256) {
         return (getOwnerOf(tagId), getFee(tagId));
     }
@@ -121,7 +133,8 @@ contract Forum {
         string [] tagWall; 
         mapping(address => uint) upvotes;
         mapping(address => uint) downvotes;
-        uint netScore;
+        uint proScore;
+        uint conScore;
     }
 
     Post[] public posts;
@@ -154,15 +167,15 @@ contract Forum {
     function tagPost(uint256 postId, string memory tagId) public {
         require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token");
         require(tagContract.getOwnerOf(tagId) != address(0), "Tag does not exist");
-
+        require(postId < posts.length, "Post does not exist");
         uint256 fee = tagContract.getFee(tagId);
-        if (tagContract.getOwnerOf(tagId) != msg.sender && fee > 0) {
+        // if guy calling contract is not the owner and the fee is > 0 and he's not exempt from the tag fee, then
+        if (tagContract.getOwnerOf(tagId) != msg.sender && fee > 0 && !tagContract.isExemptFromTagFee(tagId, msg.sender)) { 
             require(nnetContract.balanceOf(msg.sender) >= fee, "Not enough NNET tokens to add tag");
             nnetContract.transferFrom(msg.sender, tagContract.getOwnerOf(tagId), fee);
         }
-
+        // he pays the fee and the tag is added to the post
         posts[postId].tagWall.push(tagId);  // adds a new record for a posts tagWall
-        tagContract.addPostToTag(tagId, postId); // adds new record for tag
         emit PostTagged(postId, tagId, msg.sender); // Emit an event when a post is tagged
     }
     // Remove an upvote from a post
@@ -173,7 +186,7 @@ contract Forum {
 
         // Decrease the upvotes count for the post
         posts[postId].upvotes[msg.sender] -= amount;
-        posts[postId].netScore -= amount;
+        posts[postId].proScore -= amount;
     }
 
     // Remove a downvote from a post
@@ -183,7 +196,7 @@ contract Forum {
 
         // Decrease the downvotes count for the post
         posts[postId].downvotes[msg.sender] -= amount;
-        posts[postId].netScore += amount;
+        posts[postId].conScore -= amount;
     }
 
     // Users can vote on posts with their NNET tokens
@@ -194,7 +207,7 @@ contract Forum {
         require(posts[postId].downvotes[msg.sender] == 0, "Cannot upvote and downvote simultaneously");
         nnetContract.lockAfterVote();
         posts[postId].upvotes[msg.sender] += amount;
-        posts[postId].netScore += amount;
+        posts[postId].proScore += amount;
     }
 
     function downvotePost(uint256 postId, uint256 amount) public {
@@ -203,16 +216,14 @@ contract Forum {
         require(posts[postId].upvotes[msg.sender] == 0, "Cannot upvote and downvote simultaneously");
         nnetContract.lockAfterVote();
         posts[postId].downvotes[msg.sender] += amount;
-        posts[postId].netScore -= amount;
+        posts[postId].conScore += amount;
     }
     // Create a post with associated tags
     function createPostWithTag(string memory content, string[] memory tagIds) public {
-        // Create the post
-        posts.push();
-        Post storage p = posts[posts.length - 1];
-        p.author = msg.sender;
-        p.content = content;
+        require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token");
 
+        // Create the post
+        createPost(content);
         // Emit an event when a post is created
         emit PostCreated(msg.sender, content);
 
@@ -223,25 +234,21 @@ contract Forum {
         }
     }
 
+    // removes post content
     function deletePost(uint256 postId) public {
         require(nnetContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to alter community data");
         require(postId < posts.length, "Post does not exist");
         require(posts[postId].author == msg.sender, "Only the author can delete the post");
         posts[postId].content = "";
     }
-    function getPost(uint256 postId) public view returns (address, string memory, uint, string[] memory) {
+    // retrieves information about a post
+    function getPost(uint256 postId) public view returns (address, string memory, uint, uint, string[] memory) {
         require(postId < posts.length, "Post does not exist");
-        return (posts[postId].author, posts[postId].content, posts[postId].netScore, posts[postId].tagWall);
+        return (posts[postId].author, posts[postId].content, posts[postId].proScore, posts[postId].conScore, posts[postId].tagWall);
     }
+    // getters about a post
     function getForumLength() public view returns(uint){
         return posts.length;
     }
-    function getUpvotes(address addy, uint postId) public view returns(uint){
-        return posts[postId].upvotes[addy];
-    }
-    function getDownvotes(address addy, uint postId) public view returns(uint){
-        return posts[postId].downvotes[addy];
-    }
-
 
 }
