@@ -8,7 +8,7 @@ Tag, an ERC721 token, represents a unique topic in the forum. Each tag is unique
 
 By aligning incentives, this contract encourages quality content creation, active voting (curating), and valuable tag creation, which may be beneficial for the growth and vibrancy of the online community.
 
-The contract also enables the monetization of online behavior including credentials. For example, a highly upvoted post can demonstrate expertise in a particular field, which might enhance the author's reputation or job prospects.
+The contract also enables the monetization of online behavior including credentials. For example, a highly upvoted post can demonstrate expertise in a particular field, which might enhance the author's reputation or job prospects. Creator rewards for quality engagement can be raised through tagging.
 */
 pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -23,7 +23,8 @@ contract NeighborNet is ERC20 {
     }
 
     // we can't have somebody who upvotes what they like then sends their money to an account they also control then upvote the same post again. 
-    // So we created a rule: after you vote on a post, there's a 24 hour lock on your tokens. Maybe it should be a week idk
+    // So we created a rule: after you vote on a post, there's a 24 hour lock on your tokens. Maybe it should be a week idk.
+    // but this caused an issue: you cant pay to tag a post if youve recently upvoted, so you are left out of part of the economy.
     mapping(address => uint256) public lastUpvote;
 
     function getLastVoteTime(address _voter) public view returns (uint256) {
@@ -44,7 +45,7 @@ contract NeighborNet is ERC20 {
 contract Tag is ERC721Enumerable {
     NeighborNet public nnetContract;
     mapping(address => uint256) public lastMint; // only mint every 24 hrs
-    mapping(string => uint256) private _tagFees; // paid messaging & fundraising
+    mapping(string => uint256) private _tagFees; // paid messaging, fundraising, creator reward fund
     mapping(string => address) private _tagOwners; // account of ownership
     mapping(string => mapping(address => bool)) private _tagFeeExemptions; // tag fee exemptions
 
@@ -112,7 +113,6 @@ contract Tag is ERC721Enumerable {
         require(_tagOwners[tagId] == msg.sender, "Not tag owner");
         _tagFees[tagId] = fee;
     }
-    // get information about a tag
     function getFee(string memory tagId) public view returns (uint256) {
         require(_tagOwners[tagId] != address(0), "Tag does not exist");
         return _tagFees[tagId];
@@ -161,7 +161,7 @@ contract Forum {
         p.content = content;
         emit PostCreated(msg.sender, content); // Emit an event when a post is created
     }
-
+    // MAJOR TODO: bug where somebody cannot tag a post with a fee if they have posted recently because they cannot transfer their tokens now
     // Tagging a post can require a fee if the tag is owned by someone else
     // This can create a secondary market for tags where popular tags can accrue value
     function tagPost(uint256 postId, string memory tagId) public {
@@ -169,14 +169,17 @@ contract Forum {
         require(tagContract.getOwnerOf(tagId) != address(0), "Tag does not exist");
         require(postId < posts.length, "Post does not exist");
         uint256 fee = tagContract.getFee(tagId);
-        // if guy calling contract is not the owner and the fee is > 0 and he's not exempt from the tag fee, then
+    
+        // Check if the user tagging is not the owner, fee is not zero, and user is not exempted from fee
         if (tagContract.getOwnerOf(tagId) != msg.sender && fee > 0 && !tagContract.isExemptFromTagFee(tagId, msg.sender)) { 
             require(nnetContract.balanceOf(msg.sender) >= fee, "Not enough NNET tokens to add tag");
             nnetContract.transferFrom(msg.sender, tagContract.getOwnerOf(tagId), fee);
         }
-        // he pays the fee and the tag is added to the post
-        posts[postId].tagWall.push(tagId);  // adds a new record for a posts tagWall
-        emit PostTagged(postId, tagId, msg.sender); // Emit an event when a post is tagged
+
+        // Add the tag to the post
+        posts[postId].tagWall.push();
+        posts[postId].tagWall[posts[postId].tagWall.length - 1] = tagId;
+        emit PostTagged(postId, tagId, msg.sender);
     }
     // Remove an upvote from a post
     function removeUpvotePost(uint256 postId, uint256 amount) public {
