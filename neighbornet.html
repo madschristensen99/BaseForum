@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decentralized Social Media Platform</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <style>
+body {
+    font-family: 'Helvetica Neue', sans-serif;
+    color: #333;
+    background-color: #f0f0f0;
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    background-color: #2e8b57; /* seafoam green */
+    color: #fff;
+    padding: 2px;
+    text-align: center;
+    border-bottom: 3px solid #1a633e; /* darker shade of green for the border */
+}
+
+main {
+    padding: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+#posts .post {
+    border: 1px solid #ddd;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.post h3 {
+    text-align: right;
+    margin: 0;
+    margin-bottom: 10px;
+    color: #93E9BE; /* seafoam green */
+}
+
+.post .author, .post .score, .post .tag {
+    color: #aaa;
+}
+
+.upvote-button, .downvote-button, .tag-button, .reply-button {
+    background-color: #2e8b57; /* seafoam green */
+    color: #fff;
+    border: none;
+    padding: 5px 10px;
+    margin: 10px 2px 0;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.upvote-button:hover, .downvote-button:hover, .tag-button:hover, .reply-button:hover{
+    background-color: #1a633e; /* darker shade of green on hover */
+}
+
+#tag-input, #post-content {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+button[type="submit"] {
+    display: block;
+    background-color: #2e8b57; /* seafoam green */
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    margin: 0 auto;
+    width: 200px;
+    text-align: center;
+}
+
+button[type="submit"]:hover {
+    background-color: #1a633e; /* darker shade of green on hover */
+}
+
+    </style>
+</head>
+<body>
+    <header>
+        <h1>NeighborNet</h1>
+    </header>
+    <main>
+        <section id="create-post">
+            <h2>Create a Post</h2>
+            <form>
+                <textarea id="post-content" placeholder="Write your post..."></textarea>
+                <button type="submit">Submit Post</button>
+            </form>
+        </section>
+<section id="posts">
+    <h2>Posts</h2>
+
+    <article class="post" id="post1">
+        <header>
+            <h3>Post ID 1</h3>
+            <p>Post author: <span class="author">Author Name 1</span></p>
+        </header>
+        <p class="post-content">First Post content...</p>
+        <footer>
+            <button class="upvote-button"><i class="fas fa-chevron-up"></i></button>
+            <button class="downvote-button"><i class="fas fa-chevron-down"></i></button>
+            <button class="tag-button">Add Tag</button>
+            <button class="reply-button">Reply</button>
+            <p>Score: <span class="score">0</span></p>
+            <p class="tags">Tags: <span class="tag">tag1</span>, <span class="tag">tag2</span></p>
+        </footer>
+    </article>
+
+    <article class="post" id="post2">
+        <header>
+            <h3>Post ID 2</h3>
+            <p>Post author: <span class="author">Author Name 2</span></p>
+        </header>
+        <p class="post-content">Second Post content...</p>
+        <footer>
+            <button class="upvote-button"><i class="fas fa-chevron-up"></i></button>
+            <button class="downvote-button"><i class="fas fa-chevron-down"></i></button>
+            <button class="tag-button">Add Tag</button>
+            <button class="reply-button">Reply</button>
+            <p>Score: <span class="score">0</span></p>
+            <p class="tags">Tags: <span class="tag">tag1</span>, <span class="tag">tag2</span></p>
+        </footer>
+    </article>
+
+    <!-- Repeat the above block for as many posts as you want -->
+    
+</section>
+    </main>
+<script>
+const cardContainer = document.getElementById("posts");
+const loader = document.getElementById("loader");
+
+const cardLimit = 99;
+const cardIncrease = 9;
+const pageCount = Math.ceil(cardLimit / cardIncrease);
+let currentPage = 1;
+
+var throttleTimer;
+const throttle = (callback, time) => {
+  if (throttleTimer) return;
+
+  throttleTimer = true;
+
+  setTimeout(() => {
+    callback();
+    throttleTimer = false;
+  }, time);
+};
+
+const createPost = (index) => {
+  const post = document.createElement("article");
+  post.className = "post";
+  post.id = `post${index}`;
+
+  // Create the rest of your post structure here and append it to the 'post' element
+
+  cardContainer.appendChild(post);
+};
+
+const addCards = (pageIndex) => {
+  currentPage = pageIndex;
+
+  const startRange = (pageIndex - 1) * cardIncrease;
+  const endRange =
+    currentPage == pageCount ? cardLimit : pageIndex * cardIncrease;
+
+  for (let i = startRange + 1; i <= endRange; i++) {
+    createPost(i);
+  }
+};
+
+const handleInfiniteScroll = () => {
+  throttle(() => {
+    const endOfPage =
+      window.innerHeight + window.pageYOffset >= document.body.offsetHeight;
+
+    if (endOfPage) {
+      addCards(currentPage + 1);
+    }
+
+    if (currentPage === pageCount) {
+      removeInfiniteScroll();
+    }
+  }, 1000);
+};
+
+const removeInfiniteScroll = () => {
+  loader.remove();
+  window.removeEventListener("scroll", handleInfiniteScroll);
+};
+
+window.onload = function () {
+  addCards(currentPage);
+};
+
+window.addEventListener("scroll", handleInfiniteScroll);
+</script>
+</body>
+</html>
