@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
-/*
-This contract presents a decentralized forum where discussions are categorized using unique tags. The tokenomics of this system revolves around two tokens: NeighborNet (NNET) and Tag.
 
-NNET, an ERC20 token, serves as a membership token and is used as currency for certain actions. Holding at least one NNET token is a prerequisite to mint new tags, vote on posts, and tag posts. This increases the utility and potential demand for NNET tokens.
+/*
+This contract presents a decentralized forum where discussions are categorized using unique tags. The tokenomics of this system revolves around two tokens: talkOnlineToken (TALK) and TagContract (TAG).
+
+TALK, an ERC20 token, serves as a membership token and is used as currency for certain actions. Holding at least one TALK token is a prerequisite to mint new tags, vote on posts, and tag posts. This increases the utility and potential demand for TALK tokens.
 
 Tag, an ERC721 token, represents a unique topic in the forum. Each tag is unique and owned by an individual who can charge a fee for others to use it. This creates a unique monetization model for popular content creators or influencers who can mint tags early and gain financial benefits from their subsequent popularity. It also encourages early adoption and active participation in the community.
 
@@ -65,76 +66,76 @@ contract Tag is ERC721Enumerable {
 
     uint256 public constant MAX_TAG_LENGTH = 256;
 
-    function getOwnerOf(string memory tagContent) public view returns (address) {
-        uint256 tokenId = uint256(keccak256(abi.encodePacked(tagContent)));
-        return ownerOf(tokenId);
-    }
-
-    function createTag(string memory tagName) public {
+    function createTag(string memory tagContent) public {
         require(talkContract.balanceOf(msg.sender) >= 10, "Must hold at least ten TALK tokens");
-        require(getOwnerOf(tagName) == address(0), "Tag already exists");
-        require(bytes(tagName).length <= MAX_TAG_LENGTH, "Tag name exceeds maximum length");
+        uint256 tokenId = uint256(keccak256(bytes(tagContent)));
+        require(ownerOf(tokenId) == address(0), "Tag already exists");
+        require(bytes(tagContent).length <= MAX_TAG_LENGTH, "Tag name exceeds maximum length");
         talkContract.voteLock();
-        uint256 tokenId = uint256(keccak256(bytes(tagName)));
-        tags[tokenId].content = tagName;
+        
+        tags[tokenId].content = tagContent;
 
 
-        _mint(msg.sender, uint256(keccak256(bytes(tagName))));
-        emit TagCreated(tagName, msg.sender);
+        _mint(msg.sender, uint256(keccak256(bytes(tagContent))));
+        emit TagCreated(tagContent, msg.sender);
     }
 
-    function updateTagFee(string memory tagName, uint256 newEthFee) public {
+    function updateTagFee(string memory tagContent, uint256 newEthFee) public {
         require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one TALK token");
-        require(getOwnerOf(tagName) != address(0), "Tag does not exist");
-        require(getOwnerOf(tagName) == msg.sender, "You are not the owner");
-        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        uint256 tokenId = uint256(keccak256(bytes(tagContent)));
+        require(ownerOf(tokenId) != address(0), "Tag does not exist");
+        require(ownerOf(tokenId) == msg.sender, "You are not the owner");
+        
         tags[tokenId].ethFee = newEthFee;
-        emit TagFeeUpdated(tagName, newEthFee);
+        emit TagFeeUpdated(tagContent, newEthFee);
     }
 
-    function updateTokenRequirement(string memory tagName, uint256 newTokenRequirement) public {
-        require(getOwnerOf(tagName) != address(0), "Tag does not exist");
-        require(getOwnerOf(tagName) == msg.sender, "You are not the owner");
+    function updateTokenRequirement(string memory tagContent, uint256 newTokenRequirement) public {
+        uint256 tokenId = uint256(keccak256(bytes(tagContent)));
+        require(ownerOf(tokenId) != address(0), "Tag does not exist");
+        require(ownerOf(tokenId) == msg.sender, "You are not the owner");
 
-        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        
         tags[tokenId].tokenRequirement = newTokenRequirement;
-        emit TokenRequirementUpdated(tagName, newTokenRequirement);
+        emit TokenRequirementUpdated(tagContent, newTokenRequirement);
     }
 
-    function exemptFromTagFee(string memory tagName, address account) public {
-        require(getOwnerOf(tagName) != address(0), "Tag does not exist");
-        require(getOwnerOf(tagName) == msg.sender, "You are not the owner");
+    function exemptFromTagFee(string memory tagContent, address account) public {
+        uint256 tokenId = uint256(keccak256(bytes(tagContent)));
+        require(ownerOf(tokenId) != address(0), "Tag does not exist");
+        require(ownerOf(tokenId) == msg.sender, "You are not the owner");
 
-        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        
         tags[tokenId].exemptedAccounts[account] = true;
-        emit ExemptionStatusUpdated(tagName, account, true);
+        emit ExemptionStatusUpdated(tagContent, account, true);
     }
 
-    function removeExemptionFromTagFee(string memory tagName, address account) public {
-        require(getOwnerOf(tagName) != address(0), "Tag does not exist");
-        require(getOwnerOf(tagName) == msg.sender, "You are not the owner");
+    function removeExemptionFromTagFee(string memory tagContent, address account) public {
+        uint256 tokenId = uint256(keccak256(bytes(tagContent)));
+        require(ownerOf(tokenId) != address(0), "Tag does not exist");
+        require(ownerOf(tokenId) == msg.sender, "You are not the owner");
 
-        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        
         tags[tokenId].exemptedAccounts[account] = false;
-        emit ExemptionStatusUpdated(tagName, account, false);
+        emit ExemptionStatusUpdated(tagContent, account, false);
     }
 
-    function getFee(string memory tagName) public view returns(uint256) {
-        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+    function getFee(string memory tagContent) public view returns(uint256) {
+        uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         return tags[tokenId].ethFee;
     }
 
-    function getTokenRequirement(string memory tagName) public view returns(uint256) {
-        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+    function getTokenRequirement(string memory tagContent) public view returns(uint256) {
+        uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         return tags[tokenId].tokenRequirement;
     }
 
-    function isExemptFromTagFee(string memory tagName, address account) public view returns(bool) {
-        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+    function isExemptFromTagFee(string memory tagContent, address account) public view returns(bool) {
+        uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         return tags[tokenId].exemptedAccounts[account];
     }
-    function getTagDetails(string memory tagName) public view returns (string memory, uint256, uint256) {
-        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+    function getTagDetails(string memory tagContent) public view returns (string memory, uint256, uint256) {
+        uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         return (
             tags[tokenId].content,
             tags[tokenId].ethFee,
@@ -150,8 +151,9 @@ contract Forum {
     struct Post {
         address author;
         string content;
-        string[] tagWall; 
+        uint[] tagWall; 
         uint [] replies;
+        uint replyingTo;
         mapping(address => uint) upvotes;
         mapping(address => uint) downvotes;
         uint proScore;
@@ -187,7 +189,8 @@ contract Forum {
 
         newPost.author = msg.sender;
         newPost.content = content;
-        newPost.replies.push(replyId);
+        posts[replyId].replies.push(posts.length);
+        newPost.replyingTo = replyId;
         newPost.proScore = 0;
         newPost.conScore = 0;
 
@@ -196,17 +199,17 @@ contract Forum {
     }
 
     function tagPost(uint256 postId, string calldata tagContent) public {
-        require(tagContract.getOwnerOf(tagContent) != address(0), "Tag does not exist");
+        require(tagContract.ownerOf(uint256(keccak256(abi.encodePacked(tagContent)))) != address(0), "Tag does not exist");
         require(postId < posts.length, "Post does not exist");
         require(talkContract.balanceOf(msg.sender) >= tagContract.getTokenRequirement(tagContent), "Must hold more TALK token.");
 
         uint256 fee = tagContract.getFee(tagContent);
 
 
-        if (tagContract.getOwnerOf(tagContent) != msg.sender && fee > 0 && !tagContract.isExemptFromTagFee(tagContent, msg.sender)) { 
-            talkContract.transferFrom(msg.sender, tagContract.getOwnerOf(tagContent), fee);
+        if (tagContract.ownerOf(uint256(keccak256(abi.encodePacked(tagContent)))) != msg.sender && fee > 0 && !tagContract.isExemptFromTagFee(tagContent, msg.sender)) { 
+            talkContract.transferFrom(msg.sender, tagContract.ownerOf(uint256(keccak256(abi.encodePacked(tagContent)))), fee);
         }
-        posts[postId].tagWall.push(tagContent);
+        posts[postId].tagWall.push(uint256(keccak256(bytes(tagContent))));
         tagToPosts[tagContent].push(postId);
         emit PostTagged(postId, tagContent, msg.sender);
     }
@@ -260,8 +263,8 @@ contract Forum {
         posts[postId].conScore -= amount;
         delete posts[postId].downvotes[msg.sender];
     }
-
-    function getPost(uint256 postId) public view returns (address, string memory, uint, uint, string[] memory, uint[] memory) {
+    
+    function getPost(uint256 postId) public view returns (address, string memory, uint, uint, uint[] memory, uint[] memory) {
         require(postId < posts.length, "Post does not exist");
 
         Post storage p = posts[postId];
@@ -274,7 +277,7 @@ contract Forum {
     function getPostsByTag(string calldata tagContent) public view returns (uint256[] memory) {
         return tagToPosts[tagContent];
     }
-    function getPostTagWall(uint256 postId) public view returns (string[] memory) {
+    function getPostTagWall(uint256 postId) public view returns (uint[] memory) {
         require(postId < posts.length, "Post does not exist");
         return posts[postId].tagWall;
     }
