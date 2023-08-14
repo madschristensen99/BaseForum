@@ -10,149 +10,148 @@ By aligning incentives, this contract encourages quality content creation, activ
 
 The contract also enables the monetization of online behavior including credentials. For example, a highly upvoted post can demonstrate expertise in a particular field, which might enhance the author's reputation or job prospects. Creator rewards for quality engagement can be raised through tagging.
 */
+
 pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
-// The NNET token contract
-contract talkOnline is ERC20 {
-    // TODO:  ensure lock time works in all cases. 
+contract talkOnlineToken is ERC20 {
+
+    mapping(address => uint256) public lastVoteTime;
+
     constructor() ERC20("Talk.Online", "TALK") {
-        _mint(msg.sender, 100000000 * (10 ** uint256(decimals()))); // Mint 100 million tokens
-        // The initial minting of tokens establishes the total supply of tokens in the economy
-        // This can create an incentive for early adoption if the token's value appreciates over time
+        _mint(msg.sender, 100000000 * (10 ** uint256(decimals())));
     }
 
-    // we can't have somebody who upvotes what they like then sends their money to an account they also control then upvote the same post again. 
-    // So we created a rule: after you vote on a post, there's a 24 hour lock on your tokens. Maybe it should be a week idk.
-    // but this caused an issue: you cant pay to tag a post if youve recently upvoted, so you are left out of part of the economy.
-    mapping(address => uint256) public lastVote;
-    mapping(address => uint256) public nontransferables;
-    function getLastVoteTime(address _voter) public view returns (uint256) {
-        return lastVote[_voter];
-    }
-    // todo: seems like somehow tis implementation doesnt work i run lockafter vote an then getlastvotetime and it returns 0, could be result of using remix vm?
-    function lockAfterVote() public {
-        lastVote[msg.sender] = block.timestamp;
+    function voteLock() public {
+        lastVoteTime[msg.sender] = block.timestamp;
     }
 
     function canTransfer(address _from) public view returns (bool) {
-        return (block.timestamp >= lastVote[_from] + 1 days);
-    }
-    function getNontransferables(address chosen) public view returns (uint){
-        return nontransferables[chosen];
-    }
-    function setNontransferables(uint256 amount) public {
-        require(balanceOf(msg.sender) >= amount, "Insufficient balance");
-        require(canTransfer(msg.sender), "You have voted on a post within the last 24 hours.");
-        nontransferables[msg.sender] = amount;
+        // Check if user has ever voted
+        if (lastVoteTime[_from] == 0) {
+            return true;
+        }
+
+        return (block.timestamp >= lastVoteTime[_from] + 1 days);
     }
 
     function _transfer(address sender, address recipient, uint256 amount) internal virtual override {
-        require(balanceOf(sender) - nontransferables[sender] >= amount, "Non-transferable amount exceeded");
+        require(canTransfer(sender), "Too soon since last participation");
         super._transfer(sender, recipient, amount);
-
     }
 }
 
-// The Tag contract which is a unique identifier for different topics
 contract Tag is ERC721Enumerable {
 
-    talkOnline public talkContract;
-    mapping(address => uint256) public lastMint; // only mint every 24 hrs
-    mapping(string => uint256) private _tagFees; // paid messaging, fundraising, creator reward fund
-    mapping(string => address) private _tagOwners; // account of ownership
-    mapping(string => mapping(address => bool)) private _tagFeeExemptions; // tag fee exemptions
-    mapping(string => mapping(address => uint)) private revenueShare; // TODO: fully implement and test revenue shares
+    talkOnlineToken public talkContract;
 
-    // Getter for the `lastMint` mapping
-    function getLastMint(address _account) public view returns (uint256) {
-        return lastMint[_account];
+    struct TagDetails {
+        string content;
+        uint256 ethFee;              // Fee in ETH to use this tag
+        uint256 tokenRequirement;   // Amount of talkContract required to hold for using this tag
+        mapping(address => bool) exemptedAccounts;
     }
+    mapping(uint256 => TagDetails) public tags;
 
-    // Getter for the `_tagFees` mapping
-    function getTagFee(string calldata _tagId) public view returns (uint256) {
-        return _tagFees[_tagId];
-    }
-    function getOwnerOf(string calldata tagId) public view returns (address) {
-        address owner = _tagOwners[tagId];
-        require(owner != address(0), "Tag does not exist");
-        return owner;
+    event TagCreated(string tag, address owner);
+    event TagFeeUpdated(string tag, uint256 newEthFee);
+    event TokenRequirementUpdated(string tag, uint256 newTokenRequirement);
+    event ExemptionStatusUpdated(string tag, address account, bool isExempted);
+
+    constructor(address _talkContract) ERC721("TagToken", "TAG") {
+        talkContract = talkOnlineToken(_talkContract);
     }
 
-    // Emit an event when a tag is minted
-    event TagMinted(address indexed owner, string tagId);
+    uint256 public constant MAX_TAG_LENGTH = 256;
 
-    constructor(address _talkContract) ERC721("Tag", "TAG") {
-        talkContract = talkOnline(_talkContract);
-    }
-    // TODO: tagPosts need to be updated there needs to be an account we need to know who things so i guess we need three (maximum) keys in event which are tag post and Address. 
-    mapping(string => uint256[]) private _tagPosts;
-
-    function getTagPosts(string calldata tagId) public view returns (uint256[] memory) {
-        return _tagPosts[tagId];
-    }
-    function createRevenueShare(address sharee, uint proportion, string calldata tagID) public{
-        // require caller of function is owner
-        // require proportion is 0-100
-        // require sharee holds NNET
-        // set data
-    }
-    function exemptFromTagFee(string calldata tagId, address user) public {
-        require(_tagOwners[tagId] == msg.sender, "Only the tag owner can exempt users from the tag fee");
-        _tagFeeExemptions[tagId][user] = true;
+    function getOwnerOf(string memory tagContent) public view returns (address) {
+        uint256 tokenId = uint256(keccak256(abi.encodePacked(tagContent)));
+        return ownerOf(tokenId);
     }
 
-    function revokeTagFeeExemption(string calldata tagId, address user) public {
-        require(_tagOwners[tagId] == msg.sender, "Only the tag owner can revoke tag fee exemptions");
-        _tagFeeExemptions[tagId][user] = false;
-    }
-    function isExemptFromTagFee(string calldata tagId, address user) public view returns (bool) {
-        return _tagFeeExemptions[tagId][user];
-    }
-    function mintTag(string calldata tagId) public {
-        // Require holding of at least one NNET token
-        // This incentivizes users to acquire and hold NNET tokens, which can help drive the token's value
-        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token");
+    function createTag(string memory tagName) public {
+        require(talkContract.balanceOf(msg.sender) >= 10, "Must hold at least ten TALK tokens");
+        require(getOwnerOf(tagName) == address(0), "Tag already exists");
+        require(bytes(tagName).length <= MAX_TAG_LENGTH, "Tag name exceeds maximum length");
+        talkContract.voteLock();
+        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        tags[tokenId].content = tagName;
 
-        // Enforce a 24 hour period keeping an owner to minting max one per day
-        // This limits the rate at which new tags can enter the system, which can prevent the dilution of existing tags
-        require(block.timestamp >= lastMint[msg.sender] + 1 days, "You must wait 24 hours between mintings");
-        lastMint[msg.sender] = block.timestamp;
 
-        // Prevent duplicate tagIds
-        // This ensures the uniqueness of tags, which can make owning a popular tag more valuable
-        require(_tagOwners[tagId] == address(0), "Tag ID already exists");
-        talkContract.lockAfterVote();
-        _tagOwners[tagId] = msg.sender; // makes function caller the owner
-        _mint(msg.sender, uint256(keccak256(bytes(tagId))));
-        emit TagMinted(msg.sender, tagId); // Emit an event when a new tag is minted
+        _mint(msg.sender, uint256(keccak256(bytes(tagName))));
+        emit TagCreated(tagName, msg.sender);
     }
 
-    // Allow tag owners to set a fee for others to use their tag
-    // This can create a secondary market for tags where popular tags can accrue value
-    function setFee(string calldata tagId, uint256 fee) public {
-        require(_tagOwners[tagId] == msg.sender, "Not tag owner");
-        _tagFees[tagId] = fee;
+    function updateTagFee(string memory tagName, uint256 newEthFee) public {
+        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one TALK token");
+        require(getOwnerOf(tagName) != address(0), "Tag does not exist");
+        require(getOwnerOf(tagName) == msg.sender, "You are not the owner");
+        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        tags[tokenId].ethFee = newEthFee;
+        emit TagFeeUpdated(tagName, newEthFee);
     }
-    function getFee(string calldata tagId) public view returns (uint256) {
-        require(_tagOwners[tagId] != address(0), "Tag does not exist");
-        return _tagFees[tagId];
+
+    function updateTokenRequirement(string memory tagName, uint256 newTokenRequirement) public {
+        require(getOwnerOf(tagName) != address(0), "Tag does not exist");
+        require(getOwnerOf(tagName) == msg.sender, "You are not the owner");
+
+        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        tags[tokenId].tokenRequirement = newTokenRequirement;
+        emit TokenRequirementUpdated(tagName, newTokenRequirement);
     }
-    // retrieve a tag's content
-    function getTag(string calldata tagId) public view returns (address, uint256) {
-        return (getOwnerOf(tagId), getFee(tagId));
+
+    function exemptFromTagFee(string memory tagName, address account) public {
+        require(getOwnerOf(tagName) != address(0), "Tag does not exist");
+        require(getOwnerOf(tagName) == msg.sender, "You are not the owner");
+
+        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        tags[tokenId].exemptedAccounts[account] = true;
+        emit ExemptionStatusUpdated(tagName, account, true);
+    }
+
+    function removeExemptionFromTagFee(string memory tagName, address account) public {
+        require(getOwnerOf(tagName) != address(0), "Tag does not exist");
+        require(getOwnerOf(tagName) == msg.sender, "You are not the owner");
+
+        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        tags[tokenId].exemptedAccounts[account] = false;
+        emit ExemptionStatusUpdated(tagName, account, false);
+    }
+
+    function getFee(string memory tagName) public view returns(uint256) {
+        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        return tags[tokenId].ethFee;
+    }
+
+    function getTokenRequirement(string memory tagName) public view returns(uint256) {
+        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        return tags[tokenId].tokenRequirement;
+    }
+
+    function isExemptFromTagFee(string memory tagName, address account) public view returns(bool) {
+        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        return tags[tokenId].exemptedAccounts[account];
+    }
+    function getTagDetails(string memory tagName) public view returns (string memory, uint256, uint256) {
+        uint256 tokenId = uint256(keccak256(bytes(tagName)));
+        return (
+            tags[tokenId].content,
+            tags[tokenId].ethFee,
+            tags[tokenId].tokenRequirement
+        );
     }
 
 }
 
-// The main forum contract where posts are created, tagged, and voted on
+
 contract Forum {
 
     struct Post {
         address author;
         string content;
-        string [] tagWall; 
+        string[] tagWall; 
+        uint [] replies;
         mapping(address => uint) upvotes;
         mapping(address => uint) downvotes;
         uint proScore;
@@ -161,123 +160,147 @@ contract Forum {
 
     Post[] public posts;
 
-    talkOnline public talkContract;
+    talkOnlineToken public talkContract;
     Tag public tagContract;
 
-    // Events that get emitted when posts are created and tagged
     event PostCreated(address indexed author, string content);
     event PostTagged(uint indexed postId, string tagId, address tagger);
+    event PostEdited(uint indexed postId, address editor);
 
     constructor(address _talkContract, address _tagContract) {
-        talkContract = talkOnline(_talkContract);
+        talkContract = talkOnlineToken(_talkContract);
         tagContract = Tag(_tagContract);
+        // Create an initial post
+        Post storage newPost = posts.push();
+        newPost.author = address(this); // Contract itself is the author of this post
+        newPost.content = "Welcome to the Forum! Please follow the guidelines.";
+        newPost.proScore = 0;
+        newPost.conScore = 0;
     }
 
-    // Any user can create a post, but they need NNET tokens to tag or vote on posts
-    // This incentivizes users to acquire NNET tokens while being open to new members
-    function createPost(string calldata content) public {
+    mapping(string => uint256[]) public tagToPosts;
+
+    function createPost(string calldata content, uint replyId) public {
         require(bytes(content).length > 0, "Content field cannot be empty");
-        posts.push();
-        Post storage p = posts[posts.length - 1];
-        p.author = msg.sender;
-        p.content = content;
-        emit PostCreated(msg.sender, content); // Emit an event when a post is created
+        require(replyId < posts.length, "Invalid reply ID");
+        Post storage newPost = posts.push(); // directly push a new struct instance into storage
+
+        newPost.author = msg.sender;
+        newPost.content = content;
+        newPost.replies.push(replyId);
+        newPost.proScore = 0;
+        newPost.conScore = 0;
+
+
+        emit PostCreated(msg.sender, content);
     }
 
-    // Tagging a post can require a fee if the tag is owned by someone else
-    // This can create a secondary market for tags where popular tags can accrue value
-    // TODO:, in tests, couldnt make this work because it gave an error something wrong with 2nd half of code i think, wasnt working for paid tags
-    function tagPost(uint256 postId, string calldata tagId) public {
-        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token");
-        require(tagContract.getOwnerOf(tagId) != address(0), "Tag does not exist");
+    function tagPost(uint256 postId, string calldata tagContent) public {
+        require(tagContract.getOwnerOf(tagContent) != address(0), "Tag does not exist");
         require(postId < posts.length, "Post does not exist");
-        uint256 fee = tagContract.getFee(tagId);
-        // TODO: add revenue share feature
-        // Check if the user tagging is not the owner, fee is not zero, and user is not exempted from fee
-        if (tagContract.getOwnerOf(tagId) != msg.sender && fee > 0 && !tagContract.isExemptFromTagFee(tagId, msg.sender)) { 
-            require(talkContract.balanceOf(msg.sender) - talkContract.getNontransferables(msg.sender) >= fee, "Not enough transferable NNET tokens to add tag"); // minor TODO: can you make this error message have dynamic useful information?
-            talkContract.transferFrom(msg.sender, tagContract.getOwnerOf(tagId), fee);// TODO: Could be source of error as not all funds are accounted for if someone pays more than the tag fee
+        require(talkContract.balanceOf(msg.sender) >= tagContract.getTokenRequirement(tagContent), "Must hold more TALK token.");
+
+        uint256 fee = tagContract.getFee(tagContent);
+
+
+        if (tagContract.getOwnerOf(tagContent) != msg.sender && fee > 0 && !tagContract.isExemptFromTagFee(tagContent, msg.sender)) { 
+            talkContract.transferFrom(msg.sender, tagContract.getOwnerOf(tagContent), fee);
         }
-
-        // Add the tag to the post
-        posts[postId].tagWall.push();
-        posts[postId].tagWall[posts[postId].tagWall.length - 1] = tagId;
-        emit PostTagged(postId, tagId, msg.sender);
-    }
-    // Remove an upvote from a post
-    function removeUpvotePost(uint256 postId, uint256 amount) public {
-        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to vote");
-        require(posts[postId].upvotes[msg.sender] == amount, "You have not upvoted this post with the amount specified");
-
-        talkContract.lockAfterVote();
-        // Decrease the upvotes count for the post
-        posts[postId].upvotes[msg.sender] -= amount;
-        posts[postId].proScore -= amount;
+        posts[postId].tagWall.push(tagContent);
+        tagToPosts[tagContent].push(postId);
+        emit PostTagged(postId, tagContent, msg.sender);
     }
 
-    // Remove a downvote from a post
-    function removeDownvotePost(uint256 postId, uint256 amount) public {
-        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to vote");
-        require(posts[postId].downvotes[msg.sender] == amount, "You have not downvoted this post with the amount specified");
-
-        talkContract.lockAfterVote();
-        // Decrease the downvotes count for the post
-        posts[postId].downvotes[msg.sender] -= amount;
-        posts[postId].conScore -= amount;
+    function editPost(uint256 postId, string calldata updatedContent) public {
+        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one TALK token");
+        require(postId < posts.length, "Post does not exist");
+        require(posts[postId].author == msg.sender, "Only the author can edit the post");
+        posts[postId].content = updatedContent;
+        emit PostEdited(postId, msg.sender);
     }
 
-    // Users can vote on posts with their NNET tokens
-    // This creates a form of stakeholder voting where users with more tokensS have more voting power
-    function upvotePost(uint256 postId, uint256 amount) public {
-        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to vote");
-        require(posts[postId].upvotes[msg.sender] == 0, "Already upvoted");//TODO: let users add more votes if its permissable, maybe just need to adjust a line blow and get rid of this one gotta do the same for downvoting posts.
+    function upvotePost(uint256 postId) public {
+        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one TALK token to vote");
+        require(posts[postId].upvotes[msg.sender] == 0, "Already upvoted");
         require(posts[postId].downvotes[msg.sender] == 0, "Cannot upvote and downvote simultaneously");
-        require(amount <= talkContract.getNontransferables(msg.sender), "You need to allocate NNET to your voting pool");
-        talkContract.lockAfterVote();
-        posts[postId].upvotes[msg.sender] += amount;
+
+        uint256 amount = talkContract.balanceOf(msg.sender);
+        talkContract.voteLock();
+
+        posts[postId].upvotes[msg.sender] = amount;
         posts[postId].proScore += amount;
+
     }
 
-    function downvotePost(uint256 postId, uint256 amount) public {
-        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to vote");
+    function downvotePost(uint256 postId) public {
+        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one TALK token to vote");
         require(posts[postId].downvotes[msg.sender] == 0, "Already downvoted");
         require(posts[postId].upvotes[msg.sender] == 0, "Cannot upvote and downvote simultaneously");
-        require(amount <= talkContract.getNontransferables(msg.sender), "You need to allocate NNET to your voting pool");
-        talkContract.lockAfterVote();
-        posts[postId].downvotes[msg.sender] += amount;
+
+        uint256 amount = talkContract.balanceOf(msg.sender);
+        talkContract.voteLock();
+
+        posts[postId].downvotes[msg.sender] = amount;
         posts[postId].conScore += amount;
     }
-    // Create a post with associated tags
-    function createPostWithTag(string calldata content, string[] calldata tagIds) public {
-        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token");
-
-        // Create the post
-        createPost(content);
-        // Emit an event when a post is created
-        emit PostCreated(msg.sender, content);
-
-        // Loop over the provided tags and add them to the post
-        for(uint i = 0; i < tagIds.length; i++){
-            // Tag the post
-            tagPost(posts.length - 1, tagIds[i]);
-        }
+    function removeUpvote(uint256 postId) public {
+        require(posts[postId].upvotes[msg.sender] > 0, "No upvote to remove");
+        require(talkContract.balanceOf(msg.sender) >= posts[postId].upvotes[msg.sender], "Must hold at least as many TALK tokens as the upvotes you are removing");
+        talkContract.voteLock();
+        uint256 amount = posts[postId].upvotes[msg.sender];
+        posts[postId].proScore -= amount;
+        delete posts[postId].upvotes[msg.sender];
     }
 
-    // removes post content
-    function deletePost(uint256 postId) public {
-        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one NNET token to alter community data");
+    function removeDownvote(uint256 postId) public {
+        require(posts[postId].downvotes[msg.sender] > 0, "No downvote to remove");
+        require(talkContract.balanceOf(msg.sender) >= posts[postId].downvotes[msg.sender], "Must hold at least as many TALK tokens as the downvotes you are removing");
+        talkContract.voteLock();
+        uint256 amount = posts[postId].downvotes[msg.sender];
+        posts[postId].conScore -= amount;
+        delete posts[postId].downvotes[msg.sender];
+    }
+
+    function getPost(uint256 postId) public view returns (address, string memory, uint, uint, string[] memory, uint[] memory) {
         require(postId < posts.length, "Post does not exist");
-        require(posts[postId].author == msg.sender, "Only the author can delete the post");
-        posts[postId].content = "";
+
+        Post storage p = posts[postId];
+        return (p.author, p.content, p.proScore, p.conScore, p.tagWall, p.replies);
     }
-    // retrieves information about a post
-    function getPost(uint256 postId) public view returns (address, string memory, uint, uint, string[] memory) {
-        require(postId < posts.length, "Post does not exist");
-        return (posts[postId].author, posts[postId].content, posts[postId].proScore, posts[postId].conScore, posts[postId].tagWall);
-    }
-    // getters about a post
-    function getForumLength() public view returns(uint){
+
+    function getForumLength() public view returns(uint) {
         return posts.length;
     }
+    function getPostsByTag(string calldata tagContent) public view returns (uint256[] memory) {
+        return tagToPosts[tagContent];
+    }
+    function getPostTagWall(uint256 postId) public view returns (string[] memory) {
+        require(postId < posts.length, "Post does not exist");
+        return posts[postId].tagWall;
+    }
+
+    function getPostReplies(uint256 postId) public view returns (uint[] memory) {
+        require(postId < posts.length, "Post does not exist");
+        return posts[postId].replies;
+    }
+
+    function getPostUpvotes(uint256 postId, address user) public view returns (uint) {
+        require(postId < posts.length, "Post does not exist");
+        return posts[postId].upvotes[user];
+    }
+
+    function getPostDownvotes(uint256 postId, address user) public view returns (uint) {
+        require(postId < posts.length, "Post does not exist");
+        return posts[postId].downvotes[user];
+    }
+    function getConScore(uint256 postId) public view returns (uint) {
+        require(postId < posts.length, "Post does not exist");
+        return posts[postId].conScore;
+    }
+    function getProScore(uint256 postId) public view returns (uint) {
+        require(postId < posts.length, "Post does not exist");
+        return posts[postId].proScore;
+    }
+
 
 }
