@@ -12,10 +12,12 @@ By aligning incentives, this contract encourages quality content creation, activ
 The contract also enables the monetization of online behavior including credentials. For example, a highly upvoted post can demonstrate expertise in a particular field, which might enhance the author's reputation or job prospects. Creator rewards for quality engagement can be raised through tagging.
 */
 
+// boilerplate
 pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
+// initilize erc20 token add 24hr time lock
 contract talkOnlineToken is ERC20 {
 
     mapping(address => uint256) public lastVoteTime;
@@ -43,6 +45,7 @@ contract talkOnlineToken is ERC20 {
     }
 }
 
+// initialize nft utilities for qualitative curation framework
 contract Tag is ERC721Enumerable {
 
     talkOnlineToken public talkContract;
@@ -145,7 +148,7 @@ contract Tag is ERC721Enumerable {
 
 }
 
-
+// implement a forum which utilizes the features of the two previous contracts to initiate a forum managed by curation incentives
 contract Forum {
 
     struct Post {
