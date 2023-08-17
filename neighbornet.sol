@@ -69,6 +69,7 @@ contract Tag is ERC721Enumerable {
 
     uint256 public constant MAX_TAG_LENGTH = 256;
 
+    // TODO: timeout on tags you can only create one every hour: Could be used for fundraisers, ai art competitions.
     function createTag(string memory tagContent) public {
         require(talkContract.balanceOf(msg.sender) >= 10, "Must hold at least ten TALK tokens");
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
@@ -107,6 +108,7 @@ contract Tag is ERC721Enumerable {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) != address(0), "Tag does not exist");
         require(ownerOf(tokenId) == msg.sender, "You are not the owner");
+        // TODO: require status is false
 
         
         tags[tokenId].exemptedAccounts[account] = true;
@@ -118,7 +120,7 @@ contract Tag is ERC721Enumerable {
         require(ownerOf(tokenId) != address(0), "Tag does not exist");
         require(ownerOf(tokenId) == msg.sender, "You are not the owner");
 
-        
+        // TODO: require status is true
         tags[tokenId].exemptedAccounts[account] = false;
         emit ExemptionStatusUpdated(tagContent, account, false);
     }
@@ -147,13 +149,13 @@ contract Tag is ERC721Enumerable {
     }
 
 }
-
 // implement a forum which utilizes the features of the two previous contracts to initiate a forum managed by curation incentives
 contract Forum {
 
     struct Post {
         address author;
         string content;
+        // TODO: adjust how tagging is quantified, measured in relation to post usage
         uint[] tagWall; 
         uint [] replies;
         uint replyingTo;
@@ -169,8 +171,10 @@ contract Forum {
     Tag public tagContract;
 
     event PostCreated(address indexed author, string content);
-    event PostTagged(uint indexed postId, string tagId, address tagger);
-    event PostEdited(uint indexed postId, address editor);
+    event PostTagged(uint indexed postId, string indexed tagId, address indexed tagger);
+    event PostEdited(uint indexed postId);
+    event PostLiked(uint indexed postID, address indexed liker);
+    event PostDisliked(uint indexed postID, address indexed disliker);
 
     constructor(address _talkContract, address _tagContract) {
         talkContract = talkOnlineToken(_talkContract);
@@ -183,8 +187,6 @@ contract Forum {
         newPost.conScore = 0;
     }
 
-    mapping(string => uint256[]) public tagToPosts;
-
     function createPost(string calldata content, uint replyId) public {
         require(bytes(content).length > 0, "Content field cannot be empty");
         require(replyId < posts.length, "Invalid reply ID");
@@ -192,6 +194,7 @@ contract Forum {
 
         newPost.author = msg.sender;
         newPost.content = content;
+        // TODO: check this line of code
         posts[replyId].replies.push(posts.length);
         newPost.replyingTo = replyId;
         newPost.proScore = 0;
@@ -213,7 +216,6 @@ contract Forum {
             talkContract.transferFrom(msg.sender, tagContract.ownerOf(uint256(keccak256(abi.encodePacked(tagContent)))), fee);
         }
         posts[postId].tagWall.push(uint256(keccak256(bytes(tagContent))));
-        tagToPosts[tagContent].push(postId);
         emit PostTagged(postId, tagContent, msg.sender);
     }
 
@@ -222,7 +224,7 @@ contract Forum {
         require(postId < posts.length, "Post does not exist");
         require(posts[postId].author == msg.sender, "Only the author can edit the post");
         posts[postId].content = updatedContent;
-        emit PostEdited(postId, msg.sender);
+        emit PostEdited(postId);
     }
 
     function upvotePost(uint256 postId) public {
@@ -235,6 +237,7 @@ contract Forum {
 
         posts[postId].upvotes[msg.sender] = amount;
         posts[postId].proScore += amount;
+        emit PostLiked(postId, msg.sender);
 
     }
 
@@ -248,6 +251,7 @@ contract Forum {
 
         posts[postId].downvotes[msg.sender] = amount;
         posts[postId].conScore += amount;
+        emit PostDisliked(postId, msg.sender);
     }
     function removeUpvote(uint256 postId) public {
         require(posts[postId].upvotes[msg.sender] > 0, "No upvote to remove");
@@ -277,9 +281,6 @@ contract Forum {
     function getForumLength() public view returns(uint) {
         return posts.length;
     }
-    function getPostsByTag(string calldata tagContent) public view returns (uint256[] memory) {
-        return tagToPosts[tagContent];
-    }
     function getPostTagWall(uint256 postId) public view returns (uint[] memory) {
         require(postId < posts.length, "Post does not exist");
         return posts[postId].tagWall;
@@ -288,6 +289,10 @@ contract Forum {
     function getPostReplies(uint256 postId) public view returns (uint[] memory) {
         require(postId < posts.length, "Post does not exist");
         return posts[postId].replies;
+    }
+    function getPostReplyingTo(uint256 postId) public view returns (uint) {
+        require(postId < posts.length, "Post does not exist");
+        return posts[postId].replyingTo;
     }
 
     function getPostUpvotes(uint256 postId, address user) public view returns (uint) {
@@ -307,6 +312,6 @@ contract Forum {
         require(postId < posts.length, "Post does not exist");
         return posts[postId].proScore;
     }
-
+    // TODO: post with tag which is for forums it will need its own event
 
 }
