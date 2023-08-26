@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Web3 Social Media</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Talk Online</h1>
+    </header>
+    <main>
+        <section id="create-post" hidden>
+            <h2>Create a Post</h2>
+            <form id = "create-post-form">
+                <textarea id="post-content" placeholder="Write your post..." name = "postArea"></textarea>
+                <button type="submit">Submit Post</button>
+            </form>
+        </section>
+<section id="posts">
+
+</section>
+    </main>
+    <script src = "constants2.js" type="text/javascript"></script>
+    <script type ="module">
+        import { ethers } from "./ethers.min.js";
+        const provider = new ethers.providers.JsonRpcProvider("https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
+        
+        async function getFileType(url) {
+            try {
+                let response = await fetch(url, { method: 'HEAD' });
+                let contentType = response.headers.get('Content-Type');
+                if (!contentType) {
+                    return 'unknown';
+                }
+                return contentType;
+            } catch (error) {
+                console.error('Could not determine file type:', error);
+                return 'unknown';
+            }
+        }
+
+        function isURL(str) {
+            var pattern = new RegExp('^(https?:\\/\\/)?'+ // protocol
+            '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // domain name and extension
+            '((\\d{1,3}\\.){3}\\d{1,3}))'+ // OR ip (v4) address
+            '(\\:\\d+)?'+ // port
+            '(\\/[-a-z\\d%_.~+]*)*'+ // path
+            '(\\?[;&a-z\\d%_.~+=-]*)?'+ // query string
+            '(\\#[-a-z\\d_]*)?$','i'); // fragment locator
+            return !!pattern.test(str);
+        }
+
+
+        const cardContainer = document.getElementById("posts");
+        const loader = document.getElementById("loader");
+
+        const cardLimit = 999;
+        const cardIncrease = 8;
+        const pageCount = Math.ceil(cardLimit / cardIncrease);
+        let currentPage = 1;
+
+        var throttleTimer;
+        const throttle = (callback, time) => {
+            if (throttleTimer) return;
+            throttleTimer = true;
+            setTimeout(() => {
+            callback();
+            throttleTimer = false;
+            }, time);
+        };
+
+        const createPost = async (index) => {
+            const post = document.createElement("article");
+            post.className = "post";
+            post.id = `post${index}`;
+
+            // Create the rest of your post structure here and append it to the 'post' element
+            const forumContract = new ethers.Contract(forumAddress, forumAbi, provider);
+            var forumLength = await forumContract.getForumLength();
+            var postNumber = Math.trunc(Math.random() * forumLength.toNumber());
+            // TODO: right here is where we may need to adjust how the header is implemnted to get it all right
+            post.innerHTML += "<header><h3>" + postNumber.toString() + "</h3>" + "<p>Post author: <span class=\"author\">Author Name 1</span></p></header>";
+            var postInfo = await forumContract.getPost(postNumber);
+            // TODO: add address of poster
+
+            if(isURL(postInfo[1])){
+                var fileType = await getFileType(postInfo[1]);
+                if (fileType.startsWith('image/')) {
+                    // it's an image
+                    console.log("image");
+                    post.innerHTML += `<p class = "post-content"><img src="${postInfo[1]}" alt="Post image"/></p>`;
+                } else if (fileType.startsWith('video/')) {
+                    console.log("video");
+                // it's a video
+                post.innerHTML += `<p class = "post-content"><video controls src="${postInfo[1]}">Your browser does not support the video tag.</video></p>`;
+                } else if (fileType === 'text/html') {
+                    // it's a webpage // TODO: see what actually the link is formatting must be done as https must be used.
+                    console.log(`${postInfo[1]}`);
+                    // TODO: filer format differneces between links sarting with https https, or not. 
+                    post.innerHTML += `<p class = "post-content"><iframe src="https://${postInfo[1]}" frameborder="0"></iframe></p>`;
+                } else {
+                    console.log("unknown or other" + postInfo[1]);
+                    // unknown or other type TODO: potentially log what the type is so that we can treat other things, but also seems like iframes could cover this field. also, sites like youtube require a specific embed tag in the url for it to work so we can do that here as well. 
+                    // IF it ends in .jpg, png, make it an image
+                    if (postInfo[1].endsWith(".gif") || postInfo[1].endsWith(".png") || postInfo[1].endsWith(".jpg")){
+                        post.innerHTML += `<p class = "post-content"><img src="${postInfo[1]}" alt="Post image"/></p>`;
+                    }
+                    // IF it is a youtube link, reformat it to be an embedding
+                    else if(postInfo[1].includes(".be/")){
+                        postInfo[1] = postInfo[1].replace(".be/", "be.com/embed/");
+                        post.innerHTML += `<p class = "post-content"><iframe src="https://${postInfo[1]}" frameborder="0"></iframe></p>`;
+                    }
+                    else if(postInfo[1].includes("watch?v=")){
+                        postInfo[1] = postInfo[1].replace("watch?v=", "embed/");
+                        post.innerHTML += `<p class = "post-content"><iframe src="https://${postInfo[1]}" frameborder="0"></iframe></p>`;
+                    }
+                    // else, put it into an iframe
+                    else{
+                        // TODO: filer format differneces between links sarting with https https, or not. 
+                        post.innerHTML += `<p class = "post-content"><iframe src="https://${postInfo[1]}" frameborder="0"></iframe></p>`;
+                    }
+                }
+            } else {
+                // not a url, just use it as text
+                console.log("text");
+                post.innerHTML += `<p class = "post-content">${postInfo[1]}</p>`;
+            }
+            // TODO: break up score sctions, score should be the result of postInfo[2] - postInfo[3]
+            post.innerHTML += "<footer><button class=\"upvote-button\"><i class=\"fas fa-chevron-up\"></i></button><button class=\"downvote-button\"><i class=\"fas fa-chevron-down\"></i></button><button class=\"tag-button\">Add Tag</button><button class=\"reply-button\">Reply</button><p>Score: <span class=\"score\">0</span></p><p class=\"tags\">Tags: <span class=\"tag\">tag1</span>, <span class=\"tag\">tag2</span></p></footer>";
+
+            cardContainer.appendChild(post);
+        };
+
+
+        document.getElementById('create-post-form').addEventListener('submit', async (e) => {
+            // Prevent the default form submission
+            e.preventDefault();
+
+            // Get the post content from the textarea
+            const postContent = document.getElementById('post-content').value;
+
+            if (!postContent.trim()) {
+                alert("Post content is empty. Please write something.");
+                return;
+            }
+
+            // Create a new post by calling the `createPost` function on the contract
+            const forumContract = new ethers.Contract(forumAddress, forumAbi, provider);
+
+            try {
+                // Send the transaction and wait for it to be mined
+                let tx = await forumContract.createPost(postContent);
+                let receipt = await tx.wait();
+                console.log('Transaction has been mined: ', receipt.transactionHash);
+
+                // Clear the textarea after successful post creation
+                document.getElementById('post-content').value = '';
+            } catch (error) {
+                // Handle any errors
+                console.error('An error occurred:', error);
+            }
+        });
+
+
+        const addCards = (pageIndex) => {
+            currentPage = pageIndex;
+
+            const startRange = (pageIndex - 1) * cardIncrease;
+            const endRange =
+            currentPage == pageCount ? cardLimit : pageIndex * cardIncrease;
+
+            for (let i = startRange + 1; i <= endRange; i++) {
+                createPost(i);
+            }
+        };
+
+        const handleInfiniteScroll = () => {
+
+            throttle(() => {
+                // TODO: investigate tis endofPage variable to determine if it can be adjusted to make scrolling more smooth
+                const endOfPage =
+                window.innerHeight + window.pageYOffset >= document.body.offsetHeight;
+
+                if (endOfPage) {
+                    addCards(currentPage + 1);
+                }
+
+                if (currentPage === pageCount) {
+                    removeInfiniteScroll();
+                }
+            }, 1000);
+        };
+
+        const removeInfiniteScroll = () => {
+            loader.remove();
+            window.removeEventListener("scroll", handleInfiniteScroll);
+        };
+
+        window.onload = function () {
+            handleInfiniteScroll();
+            addCards(currentPage);
+        };
+
+        window.addEventListener("scroll", handleInfiniteScroll);
+        // TODO: move click stuff for some buttons to the signer section 
+        document.addEventListener('click', async (e) => {
+            // Check if the upvote button was clicked
+            if (e.target.classList.contains('upvote-button') || e.target.parentElement.classList.contains('upvote-button')) {
+                // Extract post ID from the parent article's ID to know which post is being voted on
+                const postId = e.target.closest('.post').id.replace('post', '');
+
+                try {
+                    // Call the upvotePost function from the smart contract
+                    const forumContract = new ethers.Contract(forumAddress, forumAbi, provider);
+                    let tx = await forumContract.upvotePost(postId, 1);
+                    await tx.wait();
+
+                    // Update the post's score in the UI
+                    const scoreElement = e.target.closest('.post').querySelector('.score');
+                    scoreElement.textContent = parseInt(scoreElement.textContent) + 1;
+                } catch (error) {
+                    console.error('An error occurred during upvoting:', error);
+                }
+            }
+
+            // Check if the downvote button was clicked
+            if (e.target.classList.contains('downvote-button') || e.target.parentElement.classList.contains('downvote-button')) {
+                // Extract post ID from the parent article's ID
+                const postId = e.target.closest('.post').id.replace('post', '');
+
+                try {
+                    // Call the downvotePost function from the smart contract
+                    const forumContract = new ethers.Contract(forumAddress, forumAbi, provider);
+                    let tx = await forumContract.downvotePost(postId, 1);
+                    await tx.wait();
+
+                    // Update the post's score in the UI
+                    const scoreElement = e.target.closest('.post').querySelector('.score');
+                    scoreElement.textContent = parseInt(scoreElement.textContent) - 1;
+                } catch (error) {
+                    console.error('An error occurred during downvoting:', error);
+                }
+            }
+            // Check if the 'Add Tag' or 'Reply' buttons were clicked
+            if (e.target.classList.contains('tag-button') || e.target.classList.contains('reply-button')) {
+                alert('Please sign in with a Web3 provider to use this feature.');
+            }
+
+        });
+        // TODO: 
+
+    </script>
+</body>
+</html>
