@@ -57,30 +57,34 @@ contract Tag is ERC721Enumerable {
         mapping(address => bool) exemptedAccounts;
     }
     mapping(uint256 => TagDetails) public tags;
+    mapping(address => uint256) public lastTagCreationTime;
 
     event TagCreated(string tag, address owner);
-    event TagFeeUpdated(string tag, uint256 newEthFee);
-    event TokenRequirementUpdated(string tag, uint256 newTokenRequirement);
-    event ExemptionStatusUpdated(string tag, address account, bool isExempted);
+    event TagFeeUpdated(string indexed tag, uint256 newEthFee);
+    event TokenRequirementUpdated(string indexed tag, uint256 newTokenRequirement);
+    event ExemptionStatusUpdated(string indexed tag, address indexed account, bool isExempted);
 
     constructor(address _talkContract) ERC721("TagToken", "TAG") {
         talkContract = talkOnlineToken(_talkContract);
     }
 
     uint256 public constant MAX_TAG_LENGTH = 256;
+    uint256 public constant TAG_CREATION_INTERVAL = 1 hours;
 
-    // TODO: timeout on tags you can only create one every hour: Could be used for fundraisers, ai art competitions.
+    // fundraisers, ai art competitions.
     function createTag(string memory tagContent) public {
         require(talkContract.balanceOf(msg.sender) >= 10, "Must hold at least ten TALK tokens");
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) == address(0), "Tag already exists");
         require(bytes(tagContent).length <= MAX_TAG_LENGTH, "Tag name exceeds maximum length");
+        require(block.timestamp >= lastTagCreationTime[msg.sender] + TAG_CREATION_INTERVAL, "You must wait for 1 hour between creating tags");
         talkContract.voteLock();
         
         tags[tokenId].content = tagContent;
 
 
         _mint(msg.sender, uint256(keccak256(bytes(tagContent))));
+        lastTagCreationTime[msg.sender] = block.timestamp;
         emit TagCreated(tagContent, msg.sender);
     }
 
@@ -108,9 +112,7 @@ contract Tag is ERC721Enumerable {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) != address(0), "Tag does not exist");
         require(ownerOf(tokenId) == msg.sender, "You are not the owner");
-        // TODO: require status is false
-
-        
+        require(!tags[tokenId].exemptedAccounts[account], "Account is already exempted");
         tags[tokenId].exemptedAccounts[account] = true;
         emit ExemptionStatusUpdated(tagContent, account, true);
     }
@@ -119,8 +121,7 @@ contract Tag is ERC721Enumerable {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) != address(0), "Tag does not exist");
         require(ownerOf(tokenId) == msg.sender, "You are not the owner");
-
-        // TODO: require status is true
+        require(tags[tokenId].exemptedAccounts[account], "Account is not exempted");
         tags[tokenId].exemptedAccounts[account] = false;
         emit ExemptionStatusUpdated(tagContent, account, false);
     }
@@ -139,6 +140,7 @@ contract Tag is ERC721Enumerable {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         return tags[tokenId].exemptedAccounts[account];
     }
+
     function getTagDetails(string memory tagContent) public view returns (string memory, uint256, uint256) {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         return (
@@ -155,8 +157,7 @@ contract Forum {
     struct Post {
         address author;
         string content;
-        // TODO: adjust how tagging is quantified, measured in relation to post usage
-        uint[] tagWall; 
+        mapping(address => mapping(uint => bool)) taggedByUser;
         uint [] replies;
         uint replyingTo;
         mapping(address => uint) upvotes;
@@ -170,6 +171,7 @@ contract Forum {
     talkOnlineToken public talkContract;
     Tag public tagContract;
 
+    // TODO: check if indexed are right. This will need to be done in testing, measure gas diffenrtial. Might want to kow if the exact same content is posted twice. 
     event PostCreated(address indexed author, string content);
     event PostTagged(uint indexed postId, string indexed tagId, address indexed tagger);
     event PostEdited(uint indexed postId);
@@ -194,7 +196,6 @@ contract Forum {
 
         newPost.author = msg.sender;
         newPost.content = content;
-        // TODO: check this line of code
         posts[replyId].replies.push(posts.length);
         newPost.replyingTo = replyId;
         newPost.proScore = 0;
@@ -215,7 +216,7 @@ contract Forum {
         if (tagContract.ownerOf(uint256(keccak256(abi.encodePacked(tagContent)))) != msg.sender && fee > 0 && !tagContract.isExemptFromTagFee(tagContent, msg.sender)) { 
             talkContract.transferFrom(msg.sender, tagContract.ownerOf(uint256(keccak256(abi.encodePacked(tagContent)))), fee);
         }
-        posts[postId].tagWall.push(uint256(keccak256(bytes(tagContent))));
+        posts[postId].taggedByUser[msg.sender][uint256(keccak256(abi.encodePacked(tagContent)))] = true;
         emit PostTagged(postId, tagContent, msg.sender);
     }
 
@@ -231,6 +232,7 @@ contract Forum {
         require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one TALK token to vote");
         require(posts[postId].upvotes[msg.sender] == 0, "Already upvoted");
         require(posts[postId].downvotes[msg.sender] == 0, "Cannot upvote and downvote simultaneously");
+        require(posts[postId].author != msg.sender, "Author cannot vote on their own post");
 
         uint256 amount = talkContract.balanceOf(msg.sender);
         talkContract.voteLock();
@@ -245,6 +247,7 @@ contract Forum {
         require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one TALK token to vote");
         require(posts[postId].downvotes[msg.sender] == 0, "Already downvoted");
         require(posts[postId].upvotes[msg.sender] == 0, "Cannot upvote and downvote simultaneously");
+        require(posts[postId].author != msg.sender, "Author cannot vote on their own post");
 
         uint256 amount = talkContract.balanceOf(msg.sender);
         talkContract.voteLock();
@@ -271,19 +274,15 @@ contract Forum {
         delete posts[postId].downvotes[msg.sender];
     }
     
-    function getPost(uint256 postId) public view returns (address, string memory, uint, uint, uint[] memory, uint[] memory) {
+    function getPost(uint256 postId) public view returns (address, string memory, uint, uint, uint[] memory) {
         require(postId < posts.length, "Post does not exist");
 
         Post storage p = posts[postId];
-        return (p.author, p.content, p.proScore, p.conScore, p.tagWall, p.replies);
+        return (p.author, p.content, p.proScore, p.conScore, p.replies);
     }
 
     function getForumLength() public view returns(uint) {
         return posts.length;
-    }
-    function getPostTagWall(uint256 postId) public view returns (uint[] memory) {
-        require(postId < posts.length, "Post does not exist");
-        return posts[postId].tagWall;
     }
 
     function getPostReplies(uint256 postId) public view returns (uint[] memory) {
@@ -312,6 +311,18 @@ contract Forum {
         require(postId < posts.length, "Post does not exist");
         return posts[postId].proScore;
     }
-    // TODO: post with tag which is for forums it will need its own event
+    function createPostWithTag(string calldata content, uint replyId, string[] calldata tags) public {
+        // Create the post first
+        createPost(content, replyId);
+    
+        // Get the post ID of the newly created post
+        uint256 newPostId = posts.length - 1;
+
+        // Loop through each tag in the array
+        for (uint i = 0; i < tags.length; i++) {
+            // Try tagging the post
+            tagPost(newPostId, tags[i]); 
+        }
+    }
 
 }
