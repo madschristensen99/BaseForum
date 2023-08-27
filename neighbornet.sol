@@ -273,7 +273,7 @@ contract Forum {
         posts[postId].conScore -= amount;
         delete posts[postId].downvotes[msg.sender];
     }
-    
+    // TODO: add getter for what post its replying to
     function getPost(uint256 postId) public view returns (address, string memory, uint, uint, uint[] memory) {
         require(postId < posts.length, "Post does not exist");
 
