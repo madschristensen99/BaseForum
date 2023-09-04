@@ -51,7 +51,6 @@ contract Tag is ERC721Enumerable {
     talkOnlineToken public talkContract;
 
     struct TagDetails {
-        string content;
         uint256 ethFee;              // Fee in ETH to use this tag
         uint256 tokenRequirement;   // Amount of talkContract required to hold for using this tag
         mapping(address => bool) exemptedAccounts;
@@ -59,7 +58,7 @@ contract Tag is ERC721Enumerable {
     mapping(uint256 => TagDetails) public tags;
     mapping(address => uint256) public lastTagCreationTime;
 
-    event TagCreated(string tag, address owner);
+    event TagCreated(string tag, address indexed owner);
     event TagFeeUpdated(string indexed tag, uint256 newEthFee);
     event TokenRequirementUpdated(string indexed tag, uint256 newTokenRequirement);
     event ExemptionStatusUpdated(string indexed tag, address indexed account, bool isExempted);
@@ -79,15 +78,13 @@ contract Tag is ERC721Enumerable {
         require(bytes(tagContent).length <= MAX_TAG_LENGTH, "Tag name exceeds maximum length");
         require(block.timestamp >= lastTagCreationTime[msg.sender] + TAG_CREATION_INTERVAL, "You must wait for 1 hour between creating tags");
         talkContract.voteLock();
-        
-        tags[tokenId].content = tagContent;
-
 
         _mint(msg.sender, uint256(keccak256(bytes(tagContent))));
         lastTagCreationTime[msg.sender] = block.timestamp;
         emit TagCreated(tagContent, msg.sender);
     }
 
+    // paid messaging
     function updateTagFee(string memory tagContent, uint256 newEthFee) public {
         require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one TALK token");
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
@@ -98,6 +95,7 @@ contract Tag is ERC721Enumerable {
         emit TagFeeUpdated(tagContent, newEthFee);
     }
 
+    // high rollers club, increase quality of accounts
     function updateTokenRequirement(string memory tagContent, uint256 newTokenRequirement) public {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) != address(0), "Tag does not exist");
@@ -107,7 +105,7 @@ contract Tag is ERC721Enumerable {
         tags[tokenId].tokenRequirement = newTokenRequirement;
         emit TokenRequirementUpdated(tagContent, newTokenRequirement);
     }
-
+    // permissioned system
     function exemptFromTagFee(string memory tagContent, address account) public {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) != address(0), "Tag does not exist");
@@ -117,6 +115,7 @@ contract Tag is ERC721Enumerable {
         emit ExemptionStatusUpdated(tagContent, account, true);
     }
 
+    // if it turns out you cant trust someone
     function removeExemptionFromTagFee(string memory tagContent, address account) public {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) != address(0), "Tag does not exist");
@@ -141,10 +140,9 @@ contract Tag is ERC721Enumerable {
         return tags[tokenId].exemptedAccounts[account];
     }
 
-    function getTagDetails(string memory tagContent) public view returns (string memory, uint256, uint256) {
+    function getTagDetails(string memory tagContent) public view returns (uint256, uint256) {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         return (
-            tags[tokenId].content,
             tags[tokenId].ethFee,
             tags[tokenId].tokenRequirement
         );
@@ -171,10 +169,9 @@ contract Forum {
     talkOnlineToken public talkContract;
     Tag public tagContract;
 
-    // TODO: check if indexed are right. This will need to be done in testing, measure gas diffenrtial. Might want to kow if the exact same content is posted twice. 
-    event PostCreated(address indexed author, string content);
+    event PostCreated(address indexed author, string content, uint indexed replyingTo);
     event PostTagged(uint indexed postId, string indexed tagId, address indexed tagger);
-    event PostEdited(uint indexed postId);
+    event PostEdited(uint indexed postId, string newContent);
     event PostLiked(uint indexed postID, address indexed liker);
     event PostDisliked(uint indexed postID, address indexed disliker);
 
@@ -192,7 +189,7 @@ contract Forum {
     function createPost(string calldata content, uint replyId) public {
         require(bytes(content).length > 0, "Content field cannot be empty");
         require(replyId < posts.length, "Invalid reply ID");
-        Post storage newPost = posts.push(); // directly push a new struct instance into storage
+        Post storage newPost = posts.push();
 
         newPost.author = msg.sender;
         newPost.content = content;
@@ -202,7 +199,7 @@ contract Forum {
         newPost.conScore = 0;
 
 
-        emit PostCreated(msg.sender, content);
+        emit PostCreated(msg.sender, content, replyId);
     }
 
     function tagPost(uint256 postId, string calldata tagContent) public {
@@ -225,7 +222,7 @@ contract Forum {
         require(postId < posts.length, "Post does not exist");
         require(posts[postId].author == msg.sender, "Only the author can edit the post");
         posts[postId].content = updatedContent;
-        emit PostEdited(postId);
+        emit PostEdited(postId, updatedContent);
     }
 
     function upvotePost(uint256 postId) public {
@@ -273,12 +270,12 @@ contract Forum {
         posts[postId].conScore -= amount;
         delete posts[postId].downvotes[msg.sender];
     }
-    // TODO: add getter for what post its replying to
-    function getPost(uint256 postId) public view returns (address, string memory, uint, uint, uint[] memory) {
+
+    function getPost(uint256 postId) public view returns (address, string memory, uint, uint, uint[] memory, uint) {
         require(postId < posts.length, "Post does not exist");
 
         Post storage p = posts[postId];
-        return (p.author, p.content, p.proScore, p.conScore, p.replies);
+        return (p.author, p.content, p.proScore, p.conScore, p.replies, p.replyingTo);
     }
 
     function getForumLength() public view returns(uint) {
@@ -311,18 +308,10 @@ contract Forum {
         require(postId < posts.length, "Post does not exist");
         return posts[postId].proScore;
     }
-    function createPostWithTag(string calldata content, uint replyId, string[] calldata tags) public {
-        // Create the post first
+    function createPostWithTag(string calldata content, uint replyId, string calldata tag) public {
+        require(tagContract.ownerOf(uint256(keccak256(abi.encodePacked(tag)))) != address(0), "Tag does not exist");
         createPost(content, replyId);
-    
-        // Get the post ID of the newly created post
-        uint256 newPostId = posts.length - 1;
-
-        // Loop through each tag in the array
-        for (uint i = 0; i < tags.length; i++) {
-            // Try tagging the post
-            tagPost(newPostId, tags[i]); 
-        }
+        tagPost(posts.length - 1, tag); 
     }
 
 }
