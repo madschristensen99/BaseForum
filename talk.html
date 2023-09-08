@@ -22,10 +22,17 @@
                 <button type="submit">Submit Post</button>
             </form>
         </section>
+  <select id="algos">
+    <option value="random">Random</option>
+    <option value="new">New</option>
+    <option value="recs">Reccommended</option>
+    <option value="popular">Popular</option>
+  </select> <span id = "topbar"></span>
 <section id="posts">
 
 </section>
     </main>
+    
     <script src = "constants2.js" type="text/javascript"></script>
     <script type ="module">
         import { ethers } from "./ethers.min.js";
@@ -56,6 +63,18 @@
             return !!pattern.test(str);
         }
 
+        async function getENSName(address) {
+            try {
+                const ensName = await provider.lookupAddress(address);
+                if (ensName) {
+                    return ensName;
+                } else {
+                    return address;
+                }
+            } catch (error) {
+                console.error(`Error occurred: ${error}`);
+            }
+        }
 
         const cardContainer = document.getElementById("posts");
         const loader = document.getElementById("loader");
@@ -83,11 +102,17 @@
             // Create the rest of your post structure here and append it to the 'post' element
             const forumContract = new ethers.Contract(forumAddress, forumAbi, provider);
             var forumLength = await forumContract.getForumLength();
+            // TODO: this will be where the algo is implemented for now its always random 
             var postNumber = Math.trunc(Math.random() * forumLength.toNumber());
-            // TODO: right here is where we may need to adjust how the header is implemnted to get it all right
-            post.innerHTML += "<header><h3>" + postNumber.toString() + "</h3>" + "<p>Post author: <span class=\"author\">Author Name 1</span></p></header>";
             var postInfo = await forumContract.getPost(postNumber);
-            // TODO: add address of poster
+            post.innerHTML += '<header style="text-align: center;">' + 
+                  '<div style="display: flex; justify-content: space-between;">' +
+                  '<span>Jan 7 2023 11:55 pm</span>' + 
+                  '<h3>' + postNumber.toString() + '</h3>' +
+                  '</div>' + // TODO: address into link
+                  
+                  '<p><span class="author">' + await getENSName(postInfo[0]) + '</span></p>' + 
+                  '</header>';
 
             if(isURL(postInfo[1])){
                 var fileType = await getFileType(postInfo[1]);
@@ -102,8 +127,10 @@
                 } else if (fileType === 'text/html') {
                     // it's a webpage // TODO: see what actually the link is formatting must be done as https must be used.
                     console.log(`${postInfo[1]}`);
+                    var newString = postInfo[1];
+                    newString = newString.replace("https://", "");
                     // TODO: filer format differneces between links sarting with https https, or not. 
-                    post.innerHTML += `<p class = "post-content"><iframe src="https://${postInfo[1]}" frameborder="0"></iframe></p>`;
+                    post.innerHTML += `<p class = "post-content"><iframe src="https://${newString}" frameborder="0"></iframe></p>`;
                 } else {
                     console.log("unknown or other" + postInfo[1]);
                     // unknown or other type TODO: potentially log what the type is so that we can treat other things, but also seems like iframes could cover this field. also, sites like youtube require a specific embed tag in the url for it to work so we can do that here as well. 
@@ -113,12 +140,16 @@
                     }
                     // IF it is a youtube link, reformat it to be an embedding
                     else if(postInfo[1].includes(".be/")){
-                        postInfo[1] = postInfo[1].replace(".be/", "be.com/embed/");
-                        post.innerHTML += `<p class = "post-content"><iframe src="https://${postInfo[1]}" frameborder="0"></iframe></p>`;
+                        var newString = postInfo[1];
+                        newString = newString.replace(".be/", "be.com/embed/");
+                        newString = newString.replace("https://", "");
+                        post.innerHTML += `<p class = "post-content"><iframe src="https://${newString}" frameborder="0"></iframe></p>`;
                     }
                     else if(postInfo[1].includes("watch?v=")){
-                        postInfo[1] = postInfo[1].replace("watch?v=", "embed/");
-                        post.innerHTML += `<p class = "post-content"><iframe src="https://${postInfo[1]}" frameborder="0"></iframe></p>`;
+                        var newString = postInfo[1];
+                        newString = newString.replace("watch?v=", "embed/");
+                        newString = newString.replace("https://", "");
+                        post.innerHTML += `<p class = "post-content"><iframe src="https://${newString}" frameborder="0"></iframe></p>`;
                     }
                     // else, put it into an iframe
                     else{
@@ -132,40 +163,12 @@
                 post.innerHTML += `<p class = "post-content">${postInfo[1]}</p>`;
             }
             // TODO: break up score sctions, score should be the result of postInfo[2] - postInfo[3]
-            post.innerHTML += "<footer><button class=\"upvote-button\"><i class=\"fas fa-chevron-up\"></i></button><button class=\"downvote-button\"><i class=\"fas fa-chevron-down\"></i></button><button class=\"tag-button\">Add Tag</button><button class=\"reply-button\">Reply</button><p>Score: <span class=\"score\">0</span></p><p class=\"tags\">Tags: <span class=\"tag\">tag1</span>, <span class=\"tag\">tag2</span></p></footer>";
+            post.innerHTML += "<footer><button class=\"upvote-button\"><i class=\"fas fa-chevron-up\"></i></button><button class=\"downvote-button\"><i class=\"fas fa-chevron-down\"></i></button><button class=\"tag-button\">Add Tag</button><button class=\"reply-button\">Reply</button><p>Score: <span class=\"score\">" +
+                (postInfo[2] - postInfo[3]).toString() +
+                "</span></p><p class=\"tags\">Tags: <span class=\"tag\">tag1</span>, <span class=\"tag\">tag2</span></p></footer>";
 
             cardContainer.appendChild(post);
         };
-
-
-        document.getElementById('create-post-form').addEventListener('submit', async (e) => {
-            // Prevent the default form submission
-            e.preventDefault();
-
-            // Get the post content from the textarea
-            const postContent = document.getElementById('post-content').value;
-
-            if (!postContent.trim()) {
-                alert("Post content is empty. Please write something.");
-                return;
-            }
-
-            // Create a new post by calling the `createPost` function on the contract
-            const forumContract = new ethers.Contract(forumAddress, forumAbi, provider);
-
-            try {
-                // Send the transaction and wait for it to be mined
-                let tx = await forumContract.createPost(postContent);
-                let receipt = await tx.wait();
-                console.log('Transaction has been mined: ', receipt.transactionHash);
-
-                // Clear the textarea after successful post creation
-                document.getElementById('post-content').value = '';
-            } catch (error) {
-                // Handle any errors
-                console.error('An error occurred:', error);
-            }
-        });
 
 
         const addCards = (pageIndex) => {
@@ -174,10 +177,22 @@
             const startRange = (pageIndex - 1) * cardIncrease;
             const endRange =
             currentPage == pageCount ? cardLimit : pageIndex * cardIncrease;
-
+            
             for (let i = startRange + 1; i <= endRange; i++) {
                 createPost(i);
             }
+            
+            // TODO: make a post show the OG message
+            if (!localStorage.getItem('hasVisited')) {
+                // This is a first-time visitor.
+                localStorage.setItem('hasVisited', 'true');
+                // Do something special for first-time visitor.
+                console.log('Hello, first-time visitor!');
+            } else {
+                // This is a returning visitor.
+                console.log('Hello, returning visitor!');
+            }
+
         };
 
         const handleInfiniteScroll = () => {
@@ -209,52 +224,71 @@
 
         window.addEventListener("scroll", handleInfiniteScroll);
         // TODO: move click stuff for some buttons to the signer section 
-        document.addEventListener('click', async (e) => {
-            // Check if the upvote button was clicked
-            if (e.target.classList.contains('upvote-button') || e.target.parentElement.classList.contains('upvote-button')) {
-                // Extract post ID from the parent article's ID to know which post is being voted on
-                const postId = e.target.closest('.post').id.replace('post', '');
+        // TODO: await/async with provider/signer
+        // A Web3Provider wraps a standard Web3 provider, which is
+        // what MetaMask injects as window.ethereum into each page
+        try{
+            const provider2 = new ethers.providers.Web3Provider(window.ethereum);
+
+            // MetaMask requires requesting permission to connect users accounts
+            await provider2.send("eth_requestAccounts", []);
+
+            const signer = provider2.getSigner();
+            console.log(signer);
+            document.getElementById("create-post").removeAttribute("hidden");
+            document.getElementById("topbar").innerHTML = "Your Posts     Tags            Buy TALK tokens";
+            document.getElementById('create-post-form').addEventListener('submit', async (e) => {
+                // Prevent the default form submission
+                e.preventDefault();
+
+                // Get the post content from the textarea
+                const postContent = document.getElementById('post-content').value;
+
+                if (!postContent.trim()) {
+                    alert("Post content is empty. Please write something.");
+                    return;
+                }
+
+                // Create a new post by calling the `createPost` function on the contract
+                const forumContract = new ethers.Contract(forumAddress, forumAbi, signer);
 
                 try {
-                    // Call the upvotePost function from the smart contract
-                    const forumContract = new ethers.Contract(forumAddress, forumAbi, provider);
-                    let tx = await forumContract.upvotePost(postId, 1);
-                    await tx.wait();
+                    // Send the transaction and wait for it to be mined
+                    let tx = await forumContract.createPost(postContent, 0);
+                    let receipt = await tx.wait();
+                    console.log('Transaction has been mined: ', receipt.transactionHash);
 
-                    // Update the post's score in the UI
-                    const scoreElement = e.target.closest('.post').querySelector('.score');
-                    scoreElement.textContent = parseInt(scoreElement.textContent) + 1;
+                    // Clear the textarea after successful post creation
+                    document.getElementById('post-content').value = '';
                 } catch (error) {
-                    console.error('An error occurred during upvoting:', error);
+                    // Handle any errors
+                    console.error('An error occurred:', error);
                 }
-            }
-
-            // Check if the downvote button was clicked
-            if (e.target.classList.contains('downvote-button') || e.target.parentElement.classList.contains('downvote-button')) {
-                // Extract post ID from the parent article's ID
-                const postId = e.target.closest('.post').id.replace('post', '');
-
-                try {
-                    // Call the downvotePost function from the smart contract
-                    const forumContract = new ethers.Contract(forumAddress, forumAbi, provider);
-                    let tx = await forumContract.downvotePost(postId, 1);
-                    await tx.wait();
-
-                    // Update the post's score in the UI
-                    const scoreElement = e.target.closest('.post').querySelector('.score');
-                    scoreElement.textContent = parseInt(scoreElement.textContent) - 1;
-                } catch (error) {
-                    console.error('An error occurred during downvoting:', error);
+            });
+            // TODO: functionality
+            document.addEventListener('click', async (e) => {
+                // Check if the 'Add Tag' or 'Reply' buttons were clicked
+                if (e.target.classList.contains('tag-button') || e.target.classList.contains('reply-button') ||
+                    e.target.classList.contains('downvote-button') || e.target.parentElement.classList.contains('upvote-button')) {
+                    alert('we are looking to add feature');
                 }
-            }
-            // Check if the 'Add Tag' or 'Reply' buttons were clicked
-            if (e.target.classList.contains('tag-button') || e.target.classList.contains('reply-button')) {
-                alert('Please sign in with a Web3 provider to use this feature.');
-            }
 
-        });
-        // TODO: 
+            });
 
+        }
+        catch(error){
+            
+            document.getElementById("topbar").innerHTML = "Sign in with a Web3 provider";
+            document.addEventListener('click', async (e) => {
+                // Check if the 'Add Tag' or 'Reply' buttons were clicked
+                if (e.target.classList.contains('tag-button') || e.target.classList.contains('reply-button') ||
+                    e.target.classList.contains('downvote-button') || e.target.parentElement.classList.contains('upvote-button')) {
+                    alert('Please sign in with a Web3 provider to use this feature.');
+                }
+
+            });
+
+        }
     </script>
 </body>
 </html>
