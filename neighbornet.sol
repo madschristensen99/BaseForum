@@ -72,7 +72,7 @@ contract Tag is ERC721Enumerable {
 
     // fundraisers, ai art competitions.
     function createTag(string memory tagContent) public {
-        require(talkContract.balanceOf(msg.sender) >= 10, "Must hold at least ten TALK tokens");
+        require(talkContract.balanceOf(msg.sender) > 10, "Must hold at least ten TALK tokens");
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) == address(0), "Tag already exists");
         require(bytes(tagContent).length <= MAX_TAG_LENGTH, "Tag name exceeds maximum length");
