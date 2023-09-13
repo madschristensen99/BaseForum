@@ -203,17 +203,18 @@ contract Forum {
     }
 
     function tagPost(uint256 postId, string calldata tagContent) public {
-        require(tagContract.ownerOf(uint256(keccak256(abi.encodePacked(tagContent)))) != address(0), "Tag does not exist");
+        uint id = uint256(keccak256(abi.encodePacked(tagContent)));
+        require(tagContract.ownerOf(id) != address(0), "Tag does not exist");
         require(postId < posts.length, "Post does not exist");
-        require(talkContract.balanceOf(msg.sender) >= tagContract.getTokenRequirement(tagContent), "Must hold more TALK token.");
+        require(talkContract.balanceOf(msg.sender) >= tagContract.getTokenRequirement(tagContent), "Must hold more TALK tokens.");
+        require(!posts[postId].taggedByUser[msg.sender][id]);
 
         uint256 fee = tagContract.getFee(tagContent);
 
-
-        if (tagContract.ownerOf(uint256(keccak256(abi.encodePacked(tagContent)))) != msg.sender && fee > 0 && !tagContract.isExemptFromTagFee(tagContent, msg.sender)) { 
-            talkContract.transferFrom(msg.sender, tagContract.ownerOf(uint256(keccak256(abi.encodePacked(tagContent)))), fee);
+        if (tagContract.ownerOf(id) != msg.sender && fee > 0 && !tagContract.isExemptFromTagFee(tagContent, msg.sender)) { 
+            talkContract.transferFrom(msg.sender, tagContract.ownerOf(id), fee);
         }
-        posts[postId].taggedByUser[msg.sender][uint256(keccak256(abi.encodePacked(tagContent)))] = true;
+        posts[postId].taggedByUser[msg.sender][id] = true;
         emit PostTagged(postId, tagContent, msg.sender);
     }
 
