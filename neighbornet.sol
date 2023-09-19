@@ -35,7 +35,6 @@ contract talkOnlineToken is ERC20 {
     constructor() ERC20("Talk.Online", "TALK") {
         _mint(msg.sender, 100000000 * (10 ** uint256(decimals())));
     }
-
     /**
      * @dev Locks the token transferability of the caller for 24 hours after participating in a vote.
      */
@@ -224,13 +223,14 @@ contract Tag is ERC721Enumerable {
 
 /**
  * @title Forum
- * @dev Implements a decentralized forum on the Ethereum blockchain.
+ * @dev Implements a web3 forum on the Ethereum blockchain.
  *
  * The Forum smart contract is an Ethereum-based forum where users can create, edit, upvote, downvote, and tag posts. 
  * It is designed to work in tandem with two other contracts: talkOnlineToken and Tag 
  * which respectively handle token-based operations and the tagging system of the forum. 
  * The forum is aimed at creating a community governed by curation incentives.
 */
+
 contract Forum {
 
     /**
@@ -264,6 +264,7 @@ contract Forum {
      * @param _talkContract Address of the talkOnlineToken contract.
      * @param _tagContract Address of the Tag contract.
      */
+
     constructor(address _talkContract, address _tagContract) {
         talkContract = talkOnlineToken(_talkContract);
         tagContract = Tag(_tagContract);
@@ -415,7 +416,7 @@ contract Forum {
     }
 
     /**
-     * @dev Fetches the replies of a specific post.
+     * @dev Fetches the reply post IDs of a specific post.
      * @param postId The ID of the post for which to fetch replies.
      * @return An array containing the IDs of the replies.
      */
