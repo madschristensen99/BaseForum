@@ -28,12 +28,12 @@ contract talkOnlineToken is ERC20 {
 
     // Mapping of addresses to their last voting timestamps
     mapping(address => uint256) public lastVoteTime;
-
+    address me = msg.sender;
     /**
      * @dev Constructor that gives the msg.sender all of the initial supply.
      */
     constructor() ERC20("Talk.Online", "TALK") {
-        _mint(msg.sender, 100000000);
+        _mint(me, 100000000);
     }
     /**
      * @dev Locks the token transferability of the caller for 24 hours after participating in a vote.
