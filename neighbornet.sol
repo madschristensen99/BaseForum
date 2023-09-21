@@ -145,6 +145,7 @@ contract Tag is ERC721Enumerable {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) != address(0), "Tag does not exist");
         require(ownerOf(tokenId) == msg.sender, "You are not the owner");
+        require(talkContract.balanceOf(msg.sender) >= newTokenRequirement);
 
         
         tags[tokenId].tokenRequirement = newTokenRequirement;
@@ -253,7 +254,7 @@ contract Forum {
     talkOnlineToken public talkContract;
     Tag public tagContract;
 
-    event PostCreated(address indexed author, string content, uint indexed replyingTo);
+    event PostCreated(address indexed author, string content, uint indexed postID, uint indexed replyingTo);
     event PostTagged(uint indexed postId, string indexed tagId, address indexed tagger);
     event PostEdited(uint indexed postId, string newContent);
     event PostLiked(uint indexed postID, address indexed liker);
@@ -274,6 +275,7 @@ contract Forum {
         newPost.content = "Welcome to the Forum! Please follow the guidelines.";
         newPost.proScore = 0;
         newPost.conScore = 0;
+        emit PostCreated(msg.sender, newPost.content, posts.length, 0);
     }
 
     /**
@@ -295,7 +297,7 @@ contract Forum {
         newPost.conScore = 0;
 
 
-        emit PostCreated(msg.sender, content, replyId);
+        emit PostCreated(msg.sender, content, posts.length, replyId);
     }
 
     /**
