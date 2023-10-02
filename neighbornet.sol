@@ -328,7 +328,6 @@ contract Forum {
      * @param updatedContent The new content that will replace the old one.
      */
     function editPost(uint256 postId, string calldata updatedContent) public {
-        require(talkContract.balanceOf(msg.sender) > 0, "Must hold at least one TALK token");
         require(postId < posts.length, "Post does not exist");
         require(posts[postId].author == msg.sender, "Only the author can edit the post");
         posts[postId].content = updatedContent;
