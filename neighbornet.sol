@@ -67,7 +67,7 @@ contract talkOnlineToken is ERC20 {
         super._transfer(sender, recipient, amount);
     }
 }
-
+// TODO: tag struct has a modifiable field which enables owner editing, 24hr timestall
 /**
  * @title Tag Contract
  * @dev This contract is an ERC721 Enumerable that allows users to create and manage tags. Qualitative curation framework. 
@@ -81,12 +81,15 @@ contract Tag is ERC721Enumerable {
     struct TagDetails {
         uint256 ethFee;              // Fee in ETH to use this tag
         uint256 tokenRequirement;   // Amount of talkContract required to hold for using this tag
+        string modifiableField;
+        uint lastModify;
         mapping(address => bool) exemptedAccounts;
     }
     mapping(uint256 => TagDetails) public tags;
     mapping(address => uint256) public lastTagCreationTime;
 
     event TagCreated(string tag, address indexed owner);
+    event TagModified(string indexed tag, address indexed owner, string modification);
     event TagFeeUpdated(string indexed tag, uint256 newEthFee);
     event TokenRequirementUpdated(string indexed tag, uint256 newTokenRequirement);
     event ExemptionStatusUpdated(string indexed tag, address indexed account, bool isExempted);
@@ -117,6 +120,7 @@ contract Tag is ERC721Enumerable {
 
         _mint(msg.sender, uint256(keccak256(bytes(tagContent))));
         lastTagCreationTime[msg.sender] = block.timestamp;
+
         emit TagCreated(tagContent, msg.sender);
     }
 
@@ -185,7 +189,19 @@ contract Tag is ERC721Enumerable {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         return tags[tokenId].ethFee;
     }
-
+    /**
+     * @dev Owner modifies field
+     * @param input The info owner can change about the tag can only change once every 24 hrs
+     */
+    function modifyField (string memory tagContent, string calldata input) public{
+        uint256 tokenId = uint256(keccak256(bytes(tagContent)));
+        require(ownerOf(tokenId) != address(0), "Tag does not exist");
+        require(ownerOf(tokenId) == msg.sender, "You are not the owner");
+        require(tags[tokenId].lastModify < block.timestamp + 1 days, "Too soon since last modification");
+        tags[tokenId].modifiableField = input;
+        tags[tokenId].lastModify = block.timestamp;
+        emit TagModified(tagContent, msg.sender, input);
+    }
     /**
      * @dev View function to get the ETH fee for a specific tag
      * @param tagContent The content of the tag
