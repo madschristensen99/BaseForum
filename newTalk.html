@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web3 Social Media</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f7f7f7;
+        }
+        header {
+            background-color: #008B8B;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+            font-size: 24px;
+            font-family: 'Arial', serif;
+            font-weight: bold;
+            border-bottom: 2px solid #93E9BE;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 50px auto;
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin: 0 auto; 
+        }
+        .post-box {
+            margin-bottom: 0px;
+        }
+        .post-box input[type="text"] {
+            width: calc(100% - 40px); 
+            padding: 10px 20px; 
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 10px 20px;
+            background-color: #008B8B;
+            color: #fff;
+            border: 1px solid #93E9BE; /* seafoam green border */
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background-color: #05696b; /* Darker shade for hover effect */
+        }
+        .menu {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        #posts .post {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-bottom: 10px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 1000px;
+            margin: 10px auto;
+        }
+
+        .post h3 {
+            text-align: right;
+            margin: 0;
+            margin-bottom: 10px;
+            color: #93E9BE; /* seafoam green */
+            display: inline-block; /* makes it inline */
+        }
+
+        .post .score, .post .tag {
+            color: #aaa;
+        }
+
+        .post .author {
+            color: #aaa;
+            font-size: 10px;
+        }
+
+    </style>
+</head>
+<body>
+    <header>Talk Online</header>
+
+    <div class="container">
+        <div class="menu">
+
+                <a href="./account.html">Account</a>
+                <a href="./tags.html">Tags</a>
+                <a href="./token.html">TALK</a>
+                <select name="options" id="options">
+                    <option value="popular">Popular</option>
+                    <option value="popular">Random</option>
+                    <option value="popular">New</option>
+                    <option value="popular">Recommended</option>
+                </select>
+
+        </div>
+        
+        <div class="post-box" id="createPost">
+            <input type="text" placeholder="Write your post...">
+            <button class="btn">Submit Post</button>
+        </div>
+
+        <!-- Placeholder for the dynamically generated content -->
+
+            <!-- Dynamic content will appear here 
+            Script for changing menu if there is no web3 provider found, passes web3 to next script
+            Script to generate content
+            Script to make content actually do stuff
+            -->
+        
+    </div>
+    <div id = "posts">
+    </div>
+            <script type = "module">
+                
+                import { ethers } from "./ethers.min.js";
+                import { forumAddress, forumAbi, tagAddress, tagAbi, tokenAddress, tokenAbi } from './constants.js';
+                import { getENSName, isURL, getFileType, handleURL, formatDateForDisplay } from './helpers.js';
+                // A Web3Provider wraps a standard Web3 provider, which is
+                // what MetaMask injects as window.ethereum into each page
+                // function displayContent
+                
+                function displayContent(provider){
+                    console.log(provider);
+                    const cardContainer = document.getElementById("posts");
+                    let currentPage = 1;
+                    const cardLimit = 999;
+                    const cardIncrease = 8;
+                    const pageCount = Math.ceil(cardLimit / cardIncrease);
+                    let throttleTimer;
+                    const throttle = (callback, time) => {
+                        if (throttleTimer) return;
+                        throttleTimer = true;
+                        setTimeout(() => {
+                            callback();
+                            throttleTimer = false;
+                        }, time);
+                    };
+
+                    const addCards = async(pageIndex) => {
+                        
+                        currentPage = pageIndex;
+                        const startRange = (pageIndex - 1) * cardIncrease;
+                        const endRange = currentPage == pageCount ? cardLimit : pageIndex * cardIncrease;
+                        const postPromises = [];
+                        // TODO: add parameter to this which is the algorithm being loaded, based on the chosen select HTML input
+                        // TODO: function for each algo that generates an array of uints
+                        for (let i = startRange + 1; i <= endRange; i++) {
+                            postPromises.push(createPost(i));
+                        }
+                        const posts = await Promise.all(postPromises);
+                        posts.forEach(post => cardContainer.appendChild(post));
+                    };
+                    const createPost = async (index) => {
+                        const post = document.createElement("article");
+                        post.className = "post";
+                        post.id = `post${index}`;
+                        post.innerHTML = "cards"; // TODO: here will be usage of a new function which is "load a post" which just fills a thinng with some content based on additional paramter of "What post ID are we loading?" parameter
+                        cardContainer.appendChild(post);
+                        return post;
+                    }
+                    const handleInfiniteScroll = () => {
+                        throttle(() => {
+                            const endOfPage = window.innerHeight + window.pageYOffset >= document.body.offsetHeight;
+                            if (endOfPage) {
+                                console.log("you scrolled");
+                                addCards(currentPage + 1);
+                            }
+                            if (currentPage === pageCount) {
+                                removeInfiniteScroll();
+                            }
+                        }, 1000);
+
+                    };
+
+                    const removeInfiniteScroll = () => {
+                        window.removeEventListener("scroll", handleInfiniteScroll);
+                    };
+                    handleInfiniteScroll();
+                    addCards(currentPage);
+                    window.addEventListener("scroll", handleInfiniteScroll);
+
+                }
+
+                let provider;
+                if(window.ethereum){
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                    try{
+                        let network = await provider.getNetwork();
+                        if (network.chainId == 5) {
+                            // MetaMask requires requesting permission to connect users accounts
+                            await provider.send("eth_requestAccounts", []);
+                            // The MetaMask plugin also allows signing transactions to
+                            // send ether and pay to change state within the blockchain.
+                            // For this, you need the account signer...
+                            const signer = provider.getSigner();
+                        }
+                        else{
+                            provider = new ethers.providers.JsonRpcProvider("https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
+                            document.getElementById("createPost").innerHTML = "Please switch your network to the Goerli testnet";
+                        }  
+
+                    }
+                    catch(error){
+                        provider = new ethers.providers.JsonRpcProvider("https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
+                        document.getElementById("createPost").innerHTML = "Unable to detect network";
+                    }
+
+
+
+                    displayContent(provider);
+                    // TODO: load posts
+                    // TODO: give posts functionality
+                }
+                else{
+                    document.getElementById("createPost").innerHTML = "Sign in with a <a href = \"./web3.html\">Web3 provider</a>";
+                    provider = new ethers.providers.JsonRpcProvider("https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
+                    displayContent(provider);
+                }
+            </script>
+
+</body>
+</html>
