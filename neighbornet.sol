@@ -67,7 +67,6 @@ contract talkOnlineToken is ERC20 {
         super._transfer(sender, recipient, amount);
     }
 }
-// TODO: tag struct has a modifiable field which enables owner editing, 24hr timestall
 /**
  * @title Tag Contract
  * @dev This contract is an ERC721 Enumerable that allows users to create and manage tags. Qualitative curation framework. 
@@ -191,6 +190,7 @@ contract Tag is ERC721Enumerable {
     }
     /**
      * @dev Owner modifies field
+     * @param tagContent The content of the tag to be updated
      * @param input The info owner can change about the tag can only change once every 24 hrs
      */
     function modifyField (string memory tagContent, string calldata input) public{
@@ -226,13 +226,15 @@ contract Tag is ERC721Enumerable {
     /**
      * @dev View function to get the detailed information of a specific tag
      * @param tagContent The content of the tag
-     * @return The ETH fee and TALK token holding requirement for the tag
+     * @return The ETH fee and TALK token holding requirement for the tag, and the modifiable field and the tagID
      */
-    function getTagDetails(string memory tagContent) public view returns (uint256, uint256) {
+    function getTagDetails(string memory tagContent) public view returns (uint256, uint256, string memory, uint256) {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         return (
             tags[tokenId].ethFee,
-            tags[tokenId].tokenRequirement
+            tags[tokenId].tokenRequirement,
+            tags[tokenId].modifiableField,
+            uint256(keccak256(bytes(tagContent)))
         );
     }
 
