@@ -129,10 +129,17 @@
                 // A Web3Provider wraps a standard Web3 provider, which is
                 // what MetaMask injects as window.ethereum into each page
                 // function displayContent
-                
-                function displayContent(provider){
-                    console.log(provider);
-                    const cardContainer = document.getElementById("posts");
+                async function loadContent(id, contract){
+                    let content = await contract.getPost(id);
+                    // TODO: get post ENS address
+                    // TODO: get post date
+                    // TODO: post header
+                    let postHTML = "";
+                    return content[1];
+                }
+                function displayContent(provider, sectionID){
+                    const forumContractView = new ethers.Contract(forumAddress, forumAbi, provider);
+                    const cardContainer = document.getElementById(sectionID);
                     let currentPage = 1;
                     const cardLimit = 999;
                     const cardIncrease = 8;
@@ -152,20 +159,17 @@
                         currentPage = pageIndex;
                         const startRange = (pageIndex - 1) * cardIncrease;
                         const endRange = currentPage == pageCount ? cardLimit : pageIndex * cardIncrease;
-                        const postPromises = [];
                         // TODO: add parameter to this which is the algorithm being loaded, based on the chosen select HTML input
                         // TODO: function for each algo that generates an array of uints
                         for (let i = startRange + 1; i <= endRange; i++) {
-                            postPromises.push(createPost(i));
+                            createPost(i, 0);
                         }
-                        const posts = await Promise.all(postPromises);
-                        posts.forEach(post => cardContainer.appendChild(post));
                     };
-                    const createPost = async (index) => {
+                    const createPost = async (index, postID) => {
                         const post = document.createElement("article");
                         post.className = "post";
                         post.id = `post${index}`;
-                        post.innerHTML = "cards"; // TODO: here will be usage of a new function which is "load a post" which just fills a thinng with some content based on additional paramter of "What post ID are we loading?" parameter
+                        post.innerHTML = await loadContent(postID, forumContractView); // TODO: here will be usage of a new function which is "load a post" which just fills a thinng with some content based on additional paramter of "What post ID are we loading?" parameter
                         cardContainer.appendChild(post);
                         return post;
                     }
@@ -204,6 +208,7 @@
                             // send ether and pay to change state within the blockchain.
                             // For this, you need the account signer...
                             const signer = provider.getSigner();
+                            console.log(signer);
                         }
                         else{
                             provider = new ethers.providers.JsonRpcProvider("https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
@@ -216,16 +221,14 @@
                         document.getElementById("createPost").innerHTML = "Unable to detect network";
                     }
 
-
-
-                    displayContent(provider);
+                    displayContent(provider, "posts");
                     // TODO: load posts
                     // TODO: give posts functionality
                 }
                 else{
                     document.getElementById("createPost").innerHTML = "Sign in with a <a href = \"./web3.html\">Web3 provider</a>";
                     provider = new ethers.providers.JsonRpcProvider("https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
-                    displayContent(provider);
+                    displayContent(provider, "posts");
                 }
             </script>
 
