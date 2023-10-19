@@ -21,6 +21,17 @@
             font-weight: bold;
             border-bottom: 2px solid #93E9BE;
         }
+        h1 {
+            background-color: #008B8B;
+            border-bottom: 1px solid #93E9BE;
+            padding: 5px;
+            font-size: 16px;
+            font-weight: normal;
+            text-align: center;
+            margin: 0px;
+            color: #FFFFFF;
+        }
+
         .container {
             max-width: 1000px;
             margin: 50px auto;
@@ -29,17 +40,18 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             margin: 0 auto; 
         }
-        .post-box {
+        .create-post-form {
             margin-bottom: 0px;
+            
         }
-        .post-box input[type="text"] {
+        .create-post-form input[type="text"] {
             width: calc(100% - 40px); 
             padding: 10px 20px; 
             border: 1px solid #ccc;
             border-radius: 4px;
             margin-bottom: 20px;
         }
-        .btn {
+        .sendPost {
             padding: 10px 20px;
             background-color: #008B8B;
             color: #fff;
@@ -58,6 +70,7 @@
         }
 
         #posts .post {
+            font-family: 'Helvetica Neue', sans-serif;
             border: 1px solid #ddd;
             padding: 20px;
             margin-bottom: 10px;
@@ -84,7 +97,40 @@
             color: #aaa;
             font-size: 10px;
         }
+        .ens-link {
+            color: #FFB81C;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .upvote-button, .downvote-button, .tag-button, .reply-button, .contribute-button {
+            background-color: #008B8B; /* seafoam green */
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            margin: 10px 2px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            border: 1px solid #93E9BE;
+        }
 
+        .upvote-button:hover, .downvote-button:hover, .tag-button:hover, .reply-button:hover, .contribute-button:hover {
+            background-color: #05696B; /* darker shade of green on hover */
+        }
+        table {
+            width: 100%;
+        }
+        .post-content img, .post-content video, .post-content iframe {
+            width: 100%;
+        }
+        .post-content {
+            font-family: Arial; 
+        }
+        h1 a {
+            color: #93E9BE;
+            font-size: 16px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -98,17 +144,17 @@
                 <a href="./token.html">TALK</a>
                 <select name="options" id="options">
                     <option value="popular">Popular</option>
-                    <option value="popular">Random</option>
-                    <option value="popular">New</option>
-                    <option value="popular">Recommended</option>
+                    <option value="random">Random</option>
+                    <option value="new">New</option>
+                    <option value="recommended">Recommended</option>
                 </select>
 
         </div>
         
-        <div class="post-box" id="createPost">
-            <input type="text" placeholder="Write your post...">
-            <button class="btn">Submit Post</button>
-        </div>
+        <form class="create-post-form" id="createPost">
+            <input type="text" placeholder="Write your post..." id = "post-content">
+            <button class="sendPost" >Submit Post</button>
+        </form>
 
         <!-- Placeholder for the dynamically generated content -->
 
@@ -129,13 +175,145 @@
                 // A Web3Provider wraps a standard Web3 provider, which is
                 // what MetaMask injects as window.ethereum into each page
                 // function displayContent
+                function enableAlgo (algoChosen){
+                    // TODO: run algorithms
+                    if(algoChosen == "new"){
+                        console.log("new");
+                    }
+                    let arr = [0, 0, 0, 0, 0, 0, 0, 0];
+                    return arr;
+                }
+                async function buttonMaker(){
+                    let output = `<footer id = \"givenPostsFooter\"><button class=\"upvote-button\">^</button><button class=\"downvote-button\">v</button><button class=\"tag-button\">Add Tag</button><button class=\"reply-button\">Reply</button>` +
+                        `<div class="input-wrapper" hidden><input type="text" class="input-field" placeholder="Enter your tag/reply..."><button class="submit-input">Submit</button></div></footer>`;
+                    return output;
+                }
+                async function activateContent(signer){
+                    document.getElementById('createPost').addEventListener('submit', async (e) => {
+                        // Prevent the default form submission
+                        e.preventDefault();
+
+                        // Get the post content from the textarea
+                        const postContent = document.getElementById('post-content').value;
+
+                        if (!postContent.trim()) {
+                            alert("Post content is empty. Please write something.");
+                            return;
+                        }
+
+                        // Create a new post by calling the `createPost` function on the contract
+                        const forumContract = new ethers.Contract(forumAddress, forumAbi, signer);
+                        try {
+                            // Send the transaction and wait for it to be mined
+                            let tx = await forumContract.createPost(postContent, 0);
+                            let receipt = await tx.wait();
+                            console.log('Transaction has been mined: ', receipt.transactionHash);
+                            // Clear the textarea after successful post creation
+                            document.getElementById('post-content').value = '';
+                        } catch (error) {
+                            // Handle any errors
+                            console.error('An error occurred:', error);
+                        }
+                    });
+
+                    document.addEventListener('click', async (e) => {
+                        const postElement = e.target.closest('article');  // Find the parent article
+                        if (!postElement) return;  // If clicked outside a post, exit
+                        // Fetch the post ID from the link in the post header
+                        const postIDLink = postElement.querySelector('h1 a');
+                        if (!postIDLink) return;  // If the link isn't found, exit
+                        const postID = postIDLink.textContent;
+                        const forumContract = new ethers.Contract(forumAddress, forumAbi, signer);
+                        // Check if the 'Add Tag' or 'Reply' buttons were clicked
+                        let action;
+                        if (e.target.classList.contains('tag-button')) {
+                            const inputWrapper = postElement.querySelector('.input-wrapper');
+                            const inputField = postElement.querySelector('.input-field');
+                            inputWrapper.toggleAttribute('hidden'); // Toggle visibility
+                            inputField.focus(); // Focus on the field for immediate typing
+                            action = "tag";
+                        }
+                        else if (e.target.classList.contains('reply-button')){
+                            const inputWrapper = postElement.querySelector('.input-wrapper');
+                            const inputField = postElement.querySelector('.input-field');
+                            inputWrapper.toggleAttribute('hidden'); // Toggle visibility
+                            inputField.focus(); // Focus on the field for immediate typing
+                            action = "reply";
+                        }
+                        else if (e.target.classList.contains('upvote-button')){
+                            forumContract.upvotePost(postID);
+                        }
+                        else if (e.target.classList.contains('downvote-button')){
+                            forumContract.downvotePost(postID);
+                        }
+
+                        else if (e.target.classList.contains('submit-input')) {
+                            const inputField = postElement.querySelector('.input-field');
+                            const inputValue = inputField.value.trim();
+                            console.log(action);
+                            if (inputValue && action) {
+                                if(action == "reply"){
+                                    forumContract.createPost(inputValue, postID);
+                                }
+                                else if(action == "tag"){
+                                    try{
+                                        forumContract.tagPost(postID, inputField);
+                                    } catch(error){
+                                        console.log("probably an invalid tag");
+                                    }
+                                    console.log("TagTime");
+                                }
+                                // Send your request with the inputValue
+                                // For example:
+                                // await sendTagOrReply(inputValue);
+                                inputField.value = ''; // Clear the input field after sending the request
+                            } else {
+                                alert('Please enter a valid tag or reply.');
+                            }
+                        }
+                    });
+                }
                 async function loadContent(id, contract){
                     let content = await contract.getPost(id);
-                    // TODO: get post ENS address
-                    // TODO: get post date
-                    // TODO: post header
-                    let postHTML = "";
-                    return content[1];
+                    let ensName = await getENSName(content[0], provider);
+                    
+                    // TODO: turn date getter into its own function
+                    const events = await contract.queryFilter(contract.filters.PostCreated(null, null, id + 1, null));
+                    let dateField = "Day One";
+                    try{
+                        const blockNumber = events[0].blockNumber;
+                        const block = await provider.getBlock(blockNumber);
+                        const timestamp = block.timestamp;
+                        const dateObject = new Date(timestamp * 1000);
+                        const humanReadableDate = await formatDateForDisplay(dateObject);
+                        dateField = humanReadableDate;
+                    }
+                    catch(error){
+                        console.log("post Event not found could be because its the 0th post");
+                    }
+                    
+                    // TODO: turn setup header into its own function
+                    let postHTML = "<h1>";
+                    postHTML += `<div style="display: flex; justify-content: space-between;">`;
+                    postHTML += dateField;
+                    postHTML += `<a href="https://talk.online/${id.toString()}" text-align: right;>${id.toString()}</a></div>`
+                    postHTML +=  ensName;
+                    postHTML += "</h1>";
+                    
+                    if(isURL(content[1])){
+                        postHTML += await handleURL(content[1]);
+                    } else {
+                        // not a url, just use it as text
+                        console.log("text");
+                        postHTML += `<p class = "post-content">${content[1]}</p>`;
+                    }
+                    
+                    var footer = await buttonMaker();
+                    postHTML += footer;
+
+                    // TODO: cool lower table interactions
+                    postHTML += `<table><tr> <td>Score: ` + (content[2] - content[3]).toString() + `</td> <td>Tags</td> <td>Replies: ` + content[4].length.toString() + `</td> </tr> </table>`;
+                    return postHTML;
                 }
                 function displayContent(provider, sectionID){
                     const forumContractView = new ethers.Contract(forumAddress, forumAbi, provider);
@@ -159,17 +337,17 @@
                         currentPage = pageIndex;
                         const startRange = (pageIndex - 1) * cardIncrease;
                         const endRange = currentPage == pageCount ? cardLimit : pageIndex * cardIncrease;
-                        // TODO: add parameter to this which is the algorithm being loaded, based on the chosen select HTML input
-                        // TODO: function for each algo that generates an array of uints
+                        var algo = document.getElementById("options").value;
+                        var postIds = enableAlgo(algo);
                         for (let i = startRange + 1; i <= endRange; i++) {
-                            createPost(i, 0);
+                            createPost(i, postIds.pop());
                         }
                     };
                     const createPost = async (index, postID) => {
                         const post = document.createElement("article");
                         post.className = "post";
                         post.id = `post${index}`;
-                        post.innerHTML = await loadContent(postID, forumContractView); // TODO: here will be usage of a new function which is "load a post" which just fills a thinng with some content based on additional paramter of "What post ID are we loading?" parameter
+                        post.innerHTML = await loadContent(postID, forumContractView);
                         cardContainer.appendChild(post);
                         return post;
                     }
@@ -199,6 +377,7 @@
                 let provider;
                 if(window.ethereum){
                     provider = new ethers.providers.Web3Provider(window.ethereum);
+                    let signer;
                     try{
                         let network = await provider.getNetwork();
                         if (network.chainId == 5) {
@@ -207,8 +386,7 @@
                             // The MetaMask plugin also allows signing transactions to
                             // send ether and pay to change state within the blockchain.
                             // For this, you need the account signer...
-                            const signer = provider.getSigner();
-                            console.log(signer);
+                            signer = provider.getSigner();
                         }
                         else{
                             provider = new ethers.providers.JsonRpcProvider("https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
@@ -220,10 +398,9 @@
                         provider = new ethers.providers.JsonRpcProvider("https://goerli.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
                         document.getElementById("createPost").innerHTML = "Unable to detect network";
                     }
-
+                    // TODO: change algo to recommended
                     displayContent(provider, "posts");
-                    // TODO: load posts
-                    // TODO: give posts functionality
+                    activateContent(signer);
                 }
                 else{
                     document.getElementById("createPost").innerHTML = "Sign in with a <a href = \"./web3.html\">Web3 provider</a>";
@@ -233,4 +410,6 @@
             </script>
 
 </body>
+</html>
+
 </html>
