@@ -66,6 +66,15 @@ contract talkOnlineToken is ERC20 {
         require(canTransfer(sender), "Too soon since last participation");
         super._transfer(sender, recipient, amount);
     }
+
+    /**
+     * @dev Makes display better
+     * @param addy Address being queried
+     * @return amount Amount of tokens owner has
+     */
+    function getLastVoteTime(address addy) public view returns(uint){
+        return lastVoteTime[addy];
+    }
 }
 /**
  * @title Tag Contract
