@@ -157,7 +157,7 @@ contract Tag is ERC721Enumerable {
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) != address(0), "Tag does not exist");
         require(ownerOf(tokenId) == msg.sender, "You are not the owner");
-        require(talkContract.balanceOf(tx.origin) >= newTokenRequirement);
+        require(talkContract.balanceOf(tx.origin) >= newTokenRequirement, "You cannot set a token requirement hihger than your currrent balance.");
 
         
         tags[tokenId].tokenRequirement = newTokenRequirement;
