@@ -39,7 +39,7 @@ contract talkOnlineToken is ERC20 {
      * @dev Locks the token transferability of the caller for 24 hours after participating in a vote.
      */
     function voteLock() public {
-        lastVoteTime[msg.sender] = block.timestamp;
+        lastVoteTime[tx.origin] = block.timestamp;
     }
 
     /**
