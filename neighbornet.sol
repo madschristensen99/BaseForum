@@ -33,7 +33,7 @@ contract talkOnlineToken is ERC20 {
      * @dev Constructor that gives the msg.sender all of the initial supply.
      */
     constructor() ERC20("Talk.Online", "TALK") {
-        _mint(msg.sender, 100000000);
+        _mint(msg.sender, 100000000 * (10 ** uint256(decimals())));
     }
     /**
      * @dev Locks the token transferability of the caller for 24 hours after participating in a vote.
