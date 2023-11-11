@@ -119,7 +119,7 @@ contract Tag is ERC721Enumerable {
      */
 
     function createTag(string memory tagContent) public {
-        require(talkContract.balanceOf(tx.origin) >  1 ** uint256(talkContract.decimals()), "Must hold at least one TALK token");
+        require(talkContract.balanceOf(msg.sender) >  1 ** uint256(talkContract.decimals()), "Must hold at least one TALK token");
         uint256 tokenId = uint256(keccak256(bytes(tagContent)));
         require(ownerOf(tokenId) == address(0), "Tag already exists");
         require(bytes(tagContent).length <= MAX_TAG_LENGTH, "Tag name exceeds maximum length");
