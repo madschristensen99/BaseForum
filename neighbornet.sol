@@ -110,7 +110,6 @@ contract Tag is ERC721Enumerable {
         talkContract = talkOnlineToken(_talkContract);
     }
 
-    uint256 public constant MAX_TAG_LENGTH = 256;
     uint256 public constant TAG_CREATION_INTERVAL = 1 hours;
 
     /**
